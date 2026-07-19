@@ -11,15 +11,22 @@ import {
 } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { deleteExpense, getExpenseById, updateExpense } from '../db/database';
-import { CATEGORIES, type Category, type Expense, type RootStackParamList } from '../types';
+import { deleteMovement, getMovementById, updateMovement } from '../db/database';
+import {
+  categoriesForType,
+  type Category,
+  type Movement,
+  type MovementType,
+  type RootStackParamList,
+} from '../types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'ExpenseDetail'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'MovementDetail'>;
 
-export default function ExpenseDetailScreen({ route, navigation }: Props) {
-  const { expenseId } = route.params;
+export default function MovementDetailScreen({ route, navigation }: Props) {
+  const { movementId } = route.params;
   const db = useSQLiteContext();
-  const [expense, setExpense] = useState<Expense | null>(null);
+  const [movement, setMovement] = useState<Movement | null>(null);
+  const [type, setType] = useState<MovementType>('gasto');
   const [amountText, setAmountText] = useState('');
   const [category, setCategory] = useState<Category>('Otros');
   const [description, setDescription] = useState('');
@@ -28,20 +35,22 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
   const leavingRef = useRef(false);
 
   useEffect(() => {
-    getExpenseById(db, expenseId).then((found) => {
+    getMovementById(db, movementId).then((found) => {
       if (!found) return;
-      setExpense(found);
+      setMovement(found);
+      setType(found.type);
       setAmountText(String(found.amount));
       setCategory(found.category);
       setDescription(found.description);
     });
-  }, [db, expenseId]);
+  }, [db, movementId]);
 
   const dirty =
-    !!expense &&
-    (amountText !== String(expense.amount) ||
-      category !== expense.category ||
-      description !== expense.description);
+    !!movement &&
+    (type !== movement.type ||
+      amountText !== String(movement.amount) ||
+      category !== movement.category ||
+      description !== movement.description);
 
   useEffect(() => {
     return navigation.addListener('beforeRemove', (e) => {
@@ -49,7 +58,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
       e.preventDefault();
       Alert.alert(
         'Descartar cambios',
-        'Tenés cambios sin guardar en este gasto. ¿Querés descartarlos?',
+        'Tenés cambios sin guardar en este movimiento. ¿Querés descartarlos?',
         [
           { text: 'Seguir editando', style: 'cancel' },
           {
@@ -61,6 +70,13 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
       );
     });
   }, [navigation, dirty]);
+
+  function handleSelectType(nextType: MovementType) {
+    setType(nextType);
+    if (!categoriesForType(nextType).includes(category)) {
+      setCategory('Otros');
+    }
+  }
 
   async function handleSave() {
     const amount = Number(amountText.replace(',', '.'));
@@ -75,7 +91,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
     setError(null);
     setSaving(true);
     try {
-      await updateExpense(db, expenseId, { amount, category, description: description.trim() });
+      await updateMovement(db, movementId, { type, amount, category, description: description.trim() });
       leavingRef.current = true;
       navigation.goBack();
     } finally {
@@ -84,25 +100,21 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
   }
 
   function handleDelete() {
-    Alert.alert(
-      'Eliminar gasto',
-      '¿Seguro que querés eliminar este gasto?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteExpense(db, expenseId);
-            leavingRef.current = true;
-            navigation.navigate('Home', { deletedExpense: expense ?? undefined });
-          },
+    Alert.alert('Eliminar movimiento', '¿Seguro que querés eliminarlo?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteMovement(db, movementId);
+          leavingRef.current = true;
+          navigation.navigate('Home', { deletedMovement: movement ?? undefined });
         },
-      ]
-    );
+      },
+    ]);
   }
 
-  if (!expense) {
+  if (!movement) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator />
@@ -112,6 +124,21 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
+      <Text style={styles.label}>Tipo</Text>
+      <View style={styles.typeRow}>
+        {(['gasto', 'ingreso'] as const).map((t) => (
+          <Pressable
+            key={t}
+            style={[styles.typeChip, type === t && styles.typeChipSelected]}
+            onPress={() => handleSelectType(t)}
+          >
+            <Text style={[styles.typeChipText, type === t && styles.typeChipTextSelected]}>
+              {t === 'gasto' ? 'Gasto' : 'Ingreso'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
       <Text style={styles.label}>Monto</Text>
       <TextInput
         style={styles.input}
@@ -122,7 +149,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
 
       <Text style={styles.label}>Categoría</Text>
       <View style={styles.categoryRow}>
-        {CATEGORIES.map((cat) => (
+        {categoriesForType(type).map((cat) => (
           <Pressable
             key={cat}
             style={[styles.categoryChip, cat === category && styles.categoryChipSelected]}
@@ -138,7 +165,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
       <Text style={styles.label}>Descripción</Text>
       <TextInput style={styles.input} value={description} onChangeText={setDescription} />
 
-      <Text style={styles.rawTextHint}>Texto original: "{expense.rawText}"</Text>
+      <Text style={styles.rawTextHint}>Texto original: "{movement.rawText}"</Text>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -151,7 +178,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
       </Pressable>
 
       <Pressable style={styles.deleteButton} onPress={handleDelete} disabled={saving}>
-        <Text style={styles.deleteButtonText}>Eliminar gasto</Text>
+        <Text style={styles.deleteButtonText}>Eliminar movimiento</Text>
       </Pressable>
     </ScrollView>
   );
@@ -170,6 +197,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
   },
+  typeRow: { flexDirection: 'row', gap: 8 },
+  typeChip: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  typeChipSelected: { backgroundColor: '#111827', borderColor: '#111827' },
+  typeChipText: { fontSize: 14, color: '#333', fontWeight: '600' },
+  typeChipTextSelected: { color: '#fff' },
   categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryChip: {
     borderWidth: 1,

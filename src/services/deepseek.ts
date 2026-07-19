@@ -1,20 +1,30 @@
-import { CATEGORIES, type Category, type ParsedExpense } from '../types';
+import {
+  EXPENSE_CATEGORIES,
+  INCOME_CATEGORIES,
+  isValidCategoryForType,
+  type MovementType,
+  type ParsedMovement,
+} from '../types';
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
-const SYSTEM_PROMPT = `Eres un asistente que extrae datos de un gasto a partir de una frase en lenguaje natural, en español o inglés.
+const SYSTEM_PROMPT = `Eres un asistente que extrae datos de un movimiento de dinero a partir de una frase en lenguaje natural, en español o inglés.
 Responde EXCLUSIVAMENTE con un JSON de la forma:
-{"amount": number, "category": string, "description": string}
+{"type": "gasto" | "ingreso", "amount": number, "category": string, "description": string}
 
 Reglas:
-- "amount" es el monto numérico del gasto (sin símbolos de moneda), siempre positivo.
-- "category" debe ser exactamente una de estas opciones: ${CATEGORIES.join(', ')}. Si no encaja ninguna, usa "Otros".
-- "description" es un resumen corto (máx. 6 palabras) de en qué se gastó, en el mismo idioma del texto original.
-- Si el texto no describe un gasto válido o no tiene un monto identificable, responde con {"amount": 0, "category": "Otros", "description": ""}.`;
+- "type" es "ingreso" si la persona cobró o recibió dinero (sueldo, venta, trabajo freelance, un regalo en efectivo, etc.), o "gasto" si pagó o gastó dinero. Ante la duda, usa "gasto".
+- "amount" es el monto numérico (sin símbolos de moneda), siempre positivo.
+- "category" debe ser exactamente una de estas opciones según "type":
+  - Si type es "gasto": ${EXPENSE_CATEGORIES.join(', ')}.
+  - Si type es "ingreso": ${INCOME_CATEGORIES.join(', ')}.
+  Si ninguna encaja, usa "Otros".
+- "description" es un resumen corto (máx. 6 palabras), en el mismo idioma del texto original.
+- Si el texto no describe un movimiento válido o no tiene un monto identificable, responde con {"type": "gasto", "amount": 0, "category": "Otros", "description": ""}.`;
 
 export class DeepSeekError extends Error {}
 
-export async function parseExpense(text: string, apiKey: string): Promise<ParsedExpense> {
+export async function parseMovement(text: string, apiKey: string): Promise<ParsedMovement> {
   if (!apiKey) {
     throw new DeepSeekError('Falta configurar la API key de DeepSeek.');
   }
@@ -66,10 +76,11 @@ export async function parseExpense(text: string, apiKey: string): Promise<Parsed
     throw new DeepSeekError('No se identificó un monto válido en el texto.');
   }
 
-  const category: Category = CATEGORIES.includes(parsed.category) ? parsed.category : 'Otros';
+  const type: MovementType = parsed.type === 'ingreso' ? 'ingreso' : 'gasto';
+  const category = isValidCategoryForType(parsed.category, type) ? parsed.category : 'Otros';
   const description = typeof parsed.description === 'string' && parsed.description.trim()
     ? parsed.description.trim()
     : text.trim();
 
-  return { amount, category, description };
+  return { type, amount, category, description };
 }

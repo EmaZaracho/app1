@@ -1,4 +1,4 @@
-export const CATEGORIES = [
+export const EXPENSE_CATEGORIES = [
   'Comida',
   'Transporte',
   'Vivienda',
@@ -9,10 +9,31 @@ export const CATEGORIES = [
   'Otros',
 ] as const;
 
-export type Category = (typeof CATEGORIES)[number];
+export const INCOME_CATEGORIES = [
+  'Sueldo',
+  'Freelance',
+  'Inversiones',
+  'Regalo',
+  'Otros',
+] as const;
 
-export interface Expense {
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
+export type Category = ExpenseCategory | IncomeCategory;
+
+export type MovementType = 'gasto' | 'ingreso';
+
+export function categoriesForType(type: MovementType): readonly Category[] {
+  return type === 'ingreso' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+}
+
+export function isValidCategoryForType(category: string, type: MovementType): category is Category {
+  return (categoriesForType(type) as readonly string[]).includes(category);
+}
+
+export interface Movement {
   id: number;
+  type: MovementType;
   amount: number;
   category: Category;
   description: string;
@@ -20,15 +41,22 @@ export interface Expense {
   createdAt: string;
 }
 
-export interface ParsedExpense {
+export interface ParsedMovement {
+  type: MovementType;
   amount: number;
   category: Category;
   description: string;
 }
 
+export interface Budget {
+  category: ExpenseCategory;
+  monthlyLimit: number;
+}
+
 export type RootStackParamList = {
-  Home: { deletedExpense?: Expense } | undefined;
+  Home: { deletedMovement?: Movement } | undefined;
   Summary: undefined;
   Settings: undefined;
-  ExpenseDetail: { expenseId: number };
+  Budgets: undefined;
+  MovementDetail: { movementId: number };
 };
