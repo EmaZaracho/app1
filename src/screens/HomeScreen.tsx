@@ -164,7 +164,7 @@ export default function HomeScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.header}>
         <Text style={styles.totalLabel}>Balance total</Text>
