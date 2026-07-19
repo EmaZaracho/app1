@@ -23,6 +23,13 @@ export type Category = ExpenseCategory | IncomeCategory;
 
 export type MovementType = 'gasto' | 'ingreso';
 
+export type AIProvider = 'deepseek' | 'gemini';
+
+export const AI_PROVIDERS: { id: AIProvider; label: string; keyUrl: string }[] = [
+  { id: 'deepseek', label: 'DeepSeek', keyUrl: 'https://platform.deepseek.com' },
+  { id: 'gemini', label: 'Gemini', keyUrl: 'https://aistudio.google.com/apikey' },
+];
+
 export function categoriesForType(type: MovementType): readonly Category[] {
   return type === 'ingreso' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 }

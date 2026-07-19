@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,9 +9,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useSQLiteContext } from 'expo-sqlite';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { deleteMovement, getMovementById, updateMovement } from '../db/database';
+import { iconForCategory } from '../categoryVisuals';
+import { useTheme, type Theme } from '../theme';
 import {
   categoriesForType,
   type Category,
@@ -23,6 +26,8 @@ import {
 type Props = NativeStackScreenProps<RootStackParamList, 'MovementDetail'>;
 
 export default function MovementDetailScreen({ route, navigation }: Props) {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { movementId } = route.params;
   const db = useSQLiteContext();
   const [movement, setMovement] = useState<Movement | null>(null);
@@ -92,6 +97,7 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
     setSaving(true);
     try {
       await updateMovement(db, movementId, { type, amount, category, description: description.trim() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       leavingRef.current = true;
       navigation.goBack();
     } finally {
@@ -106,6 +112,7 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
         text: 'Eliminar',
         style: 'destructive',
         onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           await deleteMovement(db, movementId);
           leavingRef.current = true;
           navigation.navigate('Home', { deletedMovement: movement ?? undefined });
@@ -117,7 +124,7 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
   if (!movement) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator />
+        <ActivityIndicator color={theme.primary} />
       </View>
     );
   }
@@ -156,7 +163,7 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
             onPress={() => setCategory(cat)}
           >
             <Text style={[styles.categoryChipText, cat === category && styles.categoryChipTextSelected]}>
-              {cat}
+              {iconForCategory(cat)} {cat}
             </Text>
           </Pressable>
         ))}
@@ -174,7 +181,11 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
         onPress={handleSave}
         disabled={saving}
       >
-        {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Guardar cambios</Text>}
+        {saving ? (
+          <ActivityIndicator color={theme.primaryText} />
+        ) : (
+          <Text style={styles.saveButtonText}>Guardar cambios</Text>
+        )}
       </Pressable>
 
       <Pressable style={styles.deleteButton} onPress={handleDelete} disabled={saving}>
@@ -184,52 +195,56 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  container: { padding: 20 },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 16 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  typeRow: { flexDirection: 'row', gap: 8 },
-  typeChip: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  typeChipSelected: { backgroundColor: '#111827', borderColor: '#111827' },
-  typeChipText: { fontSize: 14, color: '#333', fontWeight: '600' },
-  typeChipTextSelected: { color: '#fff' },
-  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  categoryChip: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  categoryChipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  categoryChipText: { fontSize: 13, color: '#333' },
-  categoryChipTextSelected: { color: '#fff', fontWeight: '600' },
-  rawTextHint: { fontSize: 12, color: '#999', marginTop: 16, fontStyle: 'italic' },
-  errorText: { color: '#dc2626', marginTop: 16 },
-  saveButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  buttonDisabled: { opacity: 0.6 },
-  saveButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  deleteButton: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  deleteButtonText: { color: '#dc2626', fontWeight: '600' },
-});
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
+    flex: { flex: 1, backgroundColor: theme.bg },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg },
+    container: { padding: 20 },
+    label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 16, color: theme.text },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+      color: theme.text,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      fontSize: 16,
+    },
+    typeRow: { flexDirection: 'row', gap: 8 },
+    typeChip: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+    },
+    typeChipSelected: { backgroundColor: theme.chipSelectedBg, borderColor: theme.chipSelectedBg },
+    typeChipText: { fontSize: 14, color: theme.text, fontWeight: '600' },
+    typeChipTextSelected: { color: theme.chipSelectedText },
+    categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    categoryChip: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    categoryChipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
+    categoryChipText: { fontSize: 13, color: theme.text },
+    categoryChipTextSelected: { color: theme.primaryText, fontWeight: '600' },
+    rawTextHint: { fontSize: 12, color: theme.textMuted, marginTop: 16, fontStyle: 'italic' },
+    errorText: { color: theme.danger, marginTop: 16 },
+    saveButton: {
+      backgroundColor: theme.primary,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 24,
+    },
+    buttonDisabled: { opacity: 0.6 },
+    saveButtonText: { color: theme.primaryText, fontWeight: '700', fontSize: 16 },
+    deleteButton: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+    deleteButtonText: { color: theme.danger, fontWeight: '600' },
+  });
+}

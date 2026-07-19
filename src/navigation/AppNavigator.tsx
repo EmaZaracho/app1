@@ -1,19 +1,42 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
 import SummaryScreen from '../screens/SummaryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import MovementDetailScreen from '../screens/MovementDetailScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
+import { useTheme } from '../theme';
 import type { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
+  const theme = useTheme();
+  const navTheme = theme.scheme === 'dark' ? DarkTheme : DefaultTheme;
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator>
+    <NavigationContainer
+      theme={{
+        ...navTheme,
+        colors: {
+          ...navTheme.colors,
+          background: theme.bg,
+          card: theme.surface,
+          text: theme.text,
+          border: theme.border,
+          primary: theme.primary,
+        },
+      }}
+    >
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: theme.surface },
+          headerTintColor: theme.text,
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: theme.bg },
+        }}
+      >
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Mis finanzas' }} />
         <Stack.Screen name="Summary" component={SummaryScreen} options={{ title: 'Resumen' }} />
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Configuración' }} />

@@ -1,15 +1,30 @@
 import * as SecureStore from 'expo-secure-store';
+import type { AIProvider } from '../types';
 
-const KEY = 'deepseek_api_key';
+const SELECTED_PROVIDER_KEY = 'selected_ai_provider';
+const DEFAULT_PROVIDER: AIProvider = 'deepseek';
 
-export async function getApiKey(): Promise<string | null> {
-  return SecureStore.getItemAsync(KEY);
+function storageKeyFor(provider: AIProvider): string {
+  return `${provider}_api_key`;
 }
 
-export async function setApiKey(value: string): Promise<void> {
-  await SecureStore.setItemAsync(KEY, value.trim());
+export async function getSelectedProvider(): Promise<AIProvider> {
+  const stored = await SecureStore.getItemAsync(SELECTED_PROVIDER_KEY);
+  return stored === 'gemini' ? 'gemini' : DEFAULT_PROVIDER;
 }
 
-export async function clearApiKey(): Promise<void> {
-  await SecureStore.deleteItemAsync(KEY);
+export async function setSelectedProvider(provider: AIProvider): Promise<void> {
+  await SecureStore.setItemAsync(SELECTED_PROVIDER_KEY, provider);
+}
+
+export async function getApiKey(provider: AIProvider): Promise<string | null> {
+  return SecureStore.getItemAsync(storageKeyFor(provider));
+}
+
+export async function setApiKey(provider: AIProvider, value: string): Promise<void> {
+  await SecureStore.setItemAsync(storageKeyFor(provider), value.trim());
+}
+
+export async function clearApiKey(provider: AIProvider): Promise<void> {
+  await SecureStore.deleteItemAsync(storageKeyFor(provider));
 }
