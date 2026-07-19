@@ -30,4 +30,5 @@ export type RootStackParamList = {
   Home: undefined;
   Summary: undefined;
   Settings: undefined;
+  ExpenseDetail: { expenseId: number };
 };

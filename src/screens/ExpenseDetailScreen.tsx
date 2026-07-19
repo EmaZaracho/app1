@@ -1,0 +1,169 @@
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSQLiteContext } from 'expo-sqlite';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { deleteExpense, getExpenseById, updateExpense } from '../db/database';
+import { CATEGORIES, type Category, type Expense, type RootStackParamList } from '../types';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'ExpenseDetail'>;
+
+export default function ExpenseDetailScreen({ route, navigation }: Props) {
+  const { expenseId } = route.params;
+  const db = useSQLiteContext();
+  const [expense, setExpense] = useState<Expense | null>(null);
+  const [amountText, setAmountText] = useState('');
+  const [category, setCategory] = useState<Category>('Otros');
+  const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getExpenseById(db, expenseId).then((found) => {
+      if (!found) return;
+      setExpense(found);
+      setAmountText(String(found.amount));
+      setCategory(found.category);
+      setDescription(found.description);
+    });
+  }, [db, expenseId]);
+
+  async function handleSave() {
+    const amount = Number(amountText.replace(',', '.'));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Ingresá un monto válido mayor a 0.');
+      return;
+    }
+    if (!description.trim()) {
+      setError('Ingresá una descripción.');
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await updateExpense(db, expenseId, { amount, category, description: description.trim() });
+      navigation.goBack();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDelete() {
+    Alert.alert(
+      'Eliminar gasto',
+      '¿Seguro que querés eliminar este gasto? Esta acción no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteExpense(db, expenseId);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  }
+
+  if (!expense) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
+      <Text style={styles.label}>Monto</Text>
+      <TextInput
+        style={styles.input}
+        value={amountText}
+        onChangeText={setAmountText}
+        keyboardType="decimal-pad"
+      />
+
+      <Text style={styles.label}>Categoría</Text>
+      <View style={styles.categoryRow}>
+        {CATEGORIES.map((cat) => (
+          <Pressable
+            key={cat}
+            style={[styles.categoryChip, cat === category && styles.categoryChipSelected]}
+            onPress={() => setCategory(cat)}
+          >
+            <Text style={[styles.categoryChipText, cat === category && styles.categoryChipTextSelected]}>
+              {cat}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>Descripción</Text>
+      <TextInput style={styles.input} value={description} onChangeText={setDescription} />
+
+      <Text style={styles.rawTextHint}>Texto original: "{expense.rawText}"</Text>
+
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      <Pressable
+        style={[styles.saveButton, saving && styles.buttonDisabled]}
+        onPress={handleSave}
+        disabled={saving}
+      >
+        {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Guardar cambios</Text>}
+      </Pressable>
+
+      <Pressable style={styles.deleteButton} onPress={handleDelete} disabled={saving}>
+        <Text style={styles.deleteButtonText}>Eliminar gasto</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { padding: 20 },
+  label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 16 },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryChip: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  categoryChipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  categoryChipText: { fontSize: 13, color: '#333' },
+  categoryChipTextSelected: { color: '#fff', fontWeight: '600' },
+  rawTextHint: { fontSize: 12, color: '#999', marginTop: 16, fontStyle: 'italic' },
+  errorText: { color: '#dc2626', marginTop: 16 },
+  saveButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  buttonDisabled: { opacity: 0.6 },
+  saveButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  deleteButton: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  deleteButtonText: { color: '#dc2626', fontWeight: '600' },
+});

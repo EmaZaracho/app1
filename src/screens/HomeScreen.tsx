@@ -86,7 +86,10 @@ export default function HomeScreen({ navigation }: Props) {
         data={expenses}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
-          <View style={styles.expenseRow}>
+          <Pressable
+            style={styles.expenseRow}
+            onPress={() => navigation.navigate('ExpenseDetail', { expenseId: item.id })}
+          >
             <View style={styles.flex}>
               <Text style={styles.expenseDescription}>{item.description}</Text>
               <View style={styles.expenseMetaRow}>
@@ -97,7 +100,7 @@ export default function HomeScreen({ navigation }: Props) {
               </View>
             </View>
             <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
-          </View>
+          </Pressable>
         )}
         ListEmptyComponent={
           <Text style={styles.emptyText}>

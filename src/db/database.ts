@@ -51,6 +51,22 @@ export async function getExpenses(db: SQLiteDatabase): Promise<Expense[]> {
   return rows.map(rowToExpense);
 }
 
+export async function getExpenseById(db: SQLiteDatabase, id: number): Promise<Expense | null> {
+  const row = await db.getFirstAsync('SELECT * FROM expenses WHERE id = ?', [id]);
+  return row ? rowToExpense(row) : null;
+}
+
+export async function updateExpense(
+  db: SQLiteDatabase,
+  id: number,
+  parsed: ParsedExpense
+): Promise<void> {
+  await db.runAsync(
+    'UPDATE expenses SET amount = ?, category = ?, description = ? WHERE id = ?',
+    [parsed.amount, parsed.category, parsed.description, id]
+  );
+}
+
 export async function deleteExpense(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('DELETE FROM expenses WHERE id = ?', [id]);
 }
