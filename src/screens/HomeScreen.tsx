@@ -13,9 +13,10 @@ import {
 import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { addExpense, getExpenses, getGrandTotal } from '../db/database';
+import { addExpense, getCurrentMonthTotal, getExpenses, getGrandTotal } from '../db/database';
 import { getApiKey } from '../services/apiKey';
 import { parseExpense, DeepSeekError } from '../services/deepseek';
+import { formatCurrency } from '../utils/format';
 import type { Expense, RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
@@ -25,13 +26,24 @@ export default function HomeScreen({ navigation }: Props) {
   const [text, setText] = useState('');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [total, setTotal] = useState(0);
+  const [monthTotal, setMonthTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [hasApiKey, setHasApiKey] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [list, grandTotal] = await Promise.all([getExpenses(db), getGrandTotal(db)]);
+    const [list, grandTotal, currentMonthTotal, apiKey] = await Promise.all([
+      getExpenses(db),
+      getGrandTotal(db),
+      getCurrentMonthTotal(db),
+      getApiKey(),
+    ]);
     setExpenses(list);
     setTotal(grandTotal);
+    setMonthTotal(currentMonthTotal);
+    setHasApiKey(!!apiKey);
+    setInitialLoading(false);
   }, [db]);
 
   useFocusEffect(
@@ -49,6 +61,7 @@ export default function HomeScreen({ navigation }: Props) {
       const apiKey = await getApiKey();
       if (!apiKey) {
         setError('Configurá tu API key de DeepSeek antes de agregar gastos.');
+        setHasApiKey(false);
         return;
       }
       const parsed = await parseExpense(trimmed, apiKey);
@@ -69,7 +82,8 @@ export default function HomeScreen({ navigation }: Props) {
     >
       <View style={styles.header}>
         <Text style={styles.totalLabel}>Total gastado</Text>
-        <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+        <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+        <Text style={styles.monthTotal}>Este mes: {formatCurrency(monthTotal)}</Text>
         <View style={styles.headerButtons}>
           <Pressable onPress={() => navigation.navigate('Summary')} style={styles.linkButton}>
             <Text style={styles.linkButtonText}>Resumen</Text>
@@ -80,6 +94,19 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       </View>
 
+      {!initialLoading && !hasApiKey ? (
+        <Pressable style={styles.apiKeyBanner} onPress={() => navigation.navigate('Settings')}>
+          <Text style={styles.apiKeyBannerText}>
+            Configurá tu API key de DeepSeek para poder agregar gastos. Tocá acá para ir a Configuración.
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {initialLoading ? (
+        <View style={styles.initialLoadingContainer}>
+          <ActivityIndicator />
+        </View>
+      ) : (
       <FlatList
         style={styles.flex}
         contentContainerStyle={styles.listContent}
@@ -99,7 +126,7 @@ export default function HomeScreen({ navigation }: Props) {
                 </Text>
               </View>
             </View>
-            <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
+            <Text style={styles.expenseAmount}>{formatCurrency(item.amount)}</Text>
           </Pressable>
         )}
         ListEmptyComponent={
@@ -108,6 +135,7 @@ export default function HomeScreen({ navigation }: Props) {
           </Text>
         }
       />
+      )}
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -143,7 +171,15 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: 14, color: '#666' },
   totalValue: { fontSize: 34, fontWeight: '700', marginTop: 4 },
+  monthTotal: { fontSize: 13, color: '#666', marginTop: 4 },
   headerButtons: { flexDirection: 'row', gap: 16, marginTop: 12 },
+  apiKeyBanner: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  apiKeyBannerText: { color: '#92400e', fontSize: 13 },
+  initialLoadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   linkButton: { paddingVertical: 4 },
   linkButtonText: { color: '#2563eb', fontWeight: '600' },
   listContent: { padding: 16, flexGrow: 1 },

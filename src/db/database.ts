@@ -92,3 +92,14 @@ export async function getGrandTotal(db: SQLiteDatabase): Promise<number> {
   );
   return row?.total ?? 0;
 }
+
+export async function getCurrentMonthTotal(db: SQLiteDatabase): Promise<number> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+  const row = await db.getFirstAsync<{ total: number | null }>(
+    'SELECT SUM(amount) as total FROM expenses WHERE created_at >= ? AND created_at < ?',
+    [monthStart, monthEnd]
+  );
+  return row?.total ?? 0;
+}

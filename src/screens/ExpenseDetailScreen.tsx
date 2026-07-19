@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const leavingRef = useRef(false);
 
   useEffect(() => {
     getExpenseById(db, expenseId).then((found) => {
@@ -35,6 +36,31 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
       setDescription(found.description);
     });
   }, [db, expenseId]);
+
+  const dirty =
+    !!expense &&
+    (amountText !== String(expense.amount) ||
+      category !== expense.category ||
+      description !== expense.description);
+
+  useEffect(() => {
+    return navigation.addListener('beforeRemove', (e) => {
+      if (leavingRef.current || !dirty) return;
+      e.preventDefault();
+      Alert.alert(
+        'Descartar cambios',
+        'Tenés cambios sin guardar en este gasto. ¿Querés descartarlos?',
+        [
+          { text: 'Seguir editando', style: 'cancel' },
+          {
+            text: 'Descartar',
+            style: 'destructive',
+            onPress: () => navigation.dispatch(e.data.action),
+          },
+        ]
+      );
+    });
+  }, [navigation, dirty]);
 
   async function handleSave() {
     const amount = Number(amountText.replace(',', '.'));
@@ -50,6 +76,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
     setSaving(true);
     try {
       await updateExpense(db, expenseId, { amount, category, description: description.trim() });
+      leavingRef.current = true;
       navigation.goBack();
     } finally {
       setSaving(false);
@@ -67,6 +94,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             await deleteExpense(db, expenseId);
+            leavingRef.current = true;
             navigation.goBack();
           },
         },
