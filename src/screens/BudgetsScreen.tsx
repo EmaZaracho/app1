@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from '@react-navigation/native';
+import { useDb } from '../db/useDb';
 import { getBudgets, getCurrentMonthExpenseCategoryTotals, setBudget } from '../db/database';
 import { formatCurrency } from '../utils/format';
 import { iconForCategory, colorForCategory } from '../categoryVisuals';
@@ -11,7 +11,7 @@ import { EXPENSE_CATEGORIES, type ExpenseCategory } from '../types';
 export default function BudgetsScreen() {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const db = useSQLiteContext();
+  const db = useDb();
   const [limits, setLimits] = useState<Record<ExpenseCategory, string>>(
     () => Object.fromEntries(EXPENSE_CATEGORIES.map((cat) => [cat, ''])) as Record<ExpenseCategory, string>
   );

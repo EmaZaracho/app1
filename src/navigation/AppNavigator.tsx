@@ -6,6 +6,8 @@ import SummaryScreen from '../screens/SummaryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import MovementDetailScreen from '../screens/MovementDetailScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
+import FundsScreen from '../screens/FundsScreen';
+import FundEditorScreen from '../screens/FundEditorScreen';
 import { useTheme } from '../theme';
 import type { RootStackParamList } from '../types';
 
@@ -41,6 +43,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Summary" component={SummaryScreen} options={{ title: 'Resumen' }} />
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Configuración' }} />
         <Stack.Screen name="Budgets" component={BudgetsScreen} options={{ title: 'Presupuestos' }} />
+        <Stack.Screen name="Funds" component={FundsScreen} options={{ title: 'Fondos' }} />
+        <Stack.Screen name="FundEditor" component={FundEditorScreen} options={{ title: 'Fondo' }} />
         <Stack.Screen
           name="MovementDetail"
           component={MovementDetailScreen}

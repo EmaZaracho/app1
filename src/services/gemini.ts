@@ -1,7 +1,4 @@
-import type { ParsedMovement } from '../types';
 import { AIProviderError } from './aiErrors';
-import { MOVEMENT_SYSTEM_PROMPT } from './movementPrompt';
-import { parseMovementResponse } from './parseMovementResponse';
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -9,15 +6,22 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 const RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
-    type: { type: 'string', enum: ['gasto', 'ingreso'] },
+    type: { type: 'string', enum: ['gasto', 'ingreso', 'transferencia'] },
     amount: { type: 'number' },
-    category: { type: 'string' },
+    category: { type: 'string', nullable: true },
     description: { type: 'string' },
+    sourceFund: { type: 'string', nullable: true },
+    destinationFund: { type: 'string', nullable: true },
   },
-  required: ['type', 'amount', 'category', 'description'],
+  required: ['type', 'amount', 'description'],
 };
 
-export async function parseMovement(text: string, apiKey: string): Promise<ParsedMovement> {
+/** Pide una completación a Gemini y devuelve el contenido crudo (JSON string). */
+export async function geminiComplete(
+  systemPrompt: string,
+  userText: string,
+  apiKey: string
+): Promise<string> {
   if (!apiKey) {
     throw new AIProviderError('Falta configurar la API key de Gemini.');
   }
@@ -28,8 +32,8 @@ export async function parseMovement(text: string, apiKey: string): Promise<Parse
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: MOVEMENT_SYSTEM_PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userText }] }],
         generationConfig: {
           temperature: 0,
           responseMimeType: 'application/json',
@@ -53,6 +57,5 @@ export async function parseMovement(text: string, apiKey: string): Promise<Parse
   if (typeof content !== 'string') {
     throw new AIProviderError('Respuesta inesperada de Gemini.');
   }
-
-  return parseMovementResponse(content, text);
+  return content;
 }

@@ -1,11 +1,13 @@
-import type { ParsedMovement } from '../types';
 import { AIProviderError } from './aiErrors';
-import { MOVEMENT_SYSTEM_PROMPT } from './movementPrompt';
-import { parseMovementResponse } from './parseMovementResponse';
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
-export async function parseMovement(text: string, apiKey: string): Promise<ParsedMovement> {
+/** Pide una completación a DeepSeek y devuelve el contenido crudo (JSON string). */
+export async function deepseekComplete(
+  systemPrompt: string,
+  userText: string,
+  apiKey: string
+): Promise<string> {
   if (!apiKey) {
     throw new AIProviderError('Falta configurar la API key de DeepSeek.');
   }
@@ -21,8 +23,8 @@ export async function parseMovement(text: string, apiKey: string): Promise<Parse
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          { role: 'system', content: MOVEMENT_SYSTEM_PROMPT },
-          { role: 'user', content: text },
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userText },
         ],
         response_format: { type: 'json_object' },
         temperature: 0,
@@ -44,6 +46,5 @@ export async function parseMovement(text: string, apiKey: string): Promise<Parse
   if (typeof content !== 'string') {
     throw new AIProviderError('Respuesta inesperada de DeepSeek.');
   }
-
-  return parseMovementResponse(content, text);
+  return content;
 }

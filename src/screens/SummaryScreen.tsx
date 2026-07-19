@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from '@react-navigation/native';
+import { useDb } from '../db/useDb';
 import {
   getCurrentMonthExpenseCategoryTotals,
   getExpenseCategoryTotals,
@@ -76,7 +76,7 @@ function DonutChart({ data, theme }: { data: CategoryTotal[]; theme: Theme }) {
 export default function SummaryScreen() {
   const theme = useTheme();
   const themedStyles = useMemo(() => createStyles(theme), [theme]);
-  const db = useSQLiteContext();
+  const db = useDb();
   const [range, setRange] = useState<Range>('month');
   const [totals, setTotals] = useState<CategoryTotal[]>([]);
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([]);

@@ -21,7 +21,14 @@ export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
 export type Category = ExpenseCategory | IncomeCategory;
 
-export type MovementType = 'gasto' | 'ingreso';
+/** Todos los tipos de movimiento del dominio. */
+export type MovementType = 'gasto' | 'ingreso' | 'transferencia' | 'ajuste';
+
+/** Tipos que la IA puede interpretar a partir de lenguaje natural. */
+export type AIMovementType = 'gasto' | 'ingreso' | 'transferencia';
+
+/** Tipos que llevan categoría obligatoria. */
+export type CategorizedMovementType = 'gasto' | 'ingreso';
 
 export type AIProvider = 'deepseek' | 'gemini';
 
@@ -30,29 +37,73 @@ export const AI_PROVIDERS: { id: AIProvider; label: string; keyUrl: string }[] =
   { id: 'gemini', label: 'Gemini', keyUrl: 'https://aistudio.google.com/apikey' },
 ];
 
-export function categoriesForType(type: MovementType): readonly Category[] {
+export function categoriesForType(type: CategorizedMovementType): readonly Category[] {
   return type === 'ingreso' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 }
 
-export function isValidCategoryForType(category: string, type: MovementType): category is Category {
+export function isCategorizedType(type: MovementType): type is CategorizedMovementType {
+  return type === 'gasto' || type === 'ingreso';
+}
+
+export function isValidCategoryForType(category: string, type: CategorizedMovementType): category is Category {
   return (categoriesForType(type) as readonly string[]).includes(category);
 }
+
+// ---------------------------------------------------------------------------
+// Fondos
+// ---------------------------------------------------------------------------
+
+export interface Fund {
+  id: number;
+  name: string;
+  normalizedName: string;
+  icon: string;
+  color: string;
+  isDefault: boolean;
+  isArchived: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FundAlias {
+  id: number;
+  fundId: number;
+  alias: string;
+  normalizedAlias: string;
+}
+
+/** Un fondo con sus alias y saldo calculado, listo para la UI. */
+export interface FundWithBalance extends Fund {
+  aliases: FundAlias[];
+  balance: number;
+}
+
+// ---------------------------------------------------------------------------
+// Movimientos
+// ---------------------------------------------------------------------------
 
 export interface Movement {
   id: number;
   type: MovementType;
   amount: number;
-  category: Category;
+  category: Category | null;
   description: string;
   rawText: string;
+  sourceFundId: number | null;
+  destinationFundId: number | null;
   createdAt: string;
 }
 
-export interface ParsedMovement {
+/** Datos de un movimiento listos para insertar (sin id ni fecha). */
+export interface NewMovement {
   type: MovementType;
   amount: number;
-  category: Category;
+  category: Category | null;
   description: string;
+  rawText: string;
+  sourceFundId: number | null;
+  destinationFundId: number | null;
 }
 
 export interface Budget {
@@ -65,5 +116,7 @@ export type RootStackParamList = {
   Summary: undefined;
   Settings: undefined;
   Budgets: undefined;
+  Funds: undefined;
+  FundEditor: { fundId?: number } | undefined;
   MovementDetail: { movementId: number };
 };

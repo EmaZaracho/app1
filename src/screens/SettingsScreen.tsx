@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   clearApiKey,
   getApiKey,
@@ -8,9 +9,11 @@ import {
   setSelectedProvider,
 } from '../services/apiKey';
 import { useTheme, type Theme } from '../theme';
-import { AI_PROVIDERS, type AIProvider } from '../types';
+import { AI_PROVIDERS, type AIProvider, type RootStackParamList } from '../types';
 
-export default function SettingsScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
+
+export default function SettingsScreen({ navigation }: Props) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [provider, setProvider] = useState<AIProvider>('deepseek');
@@ -63,6 +66,11 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
+      <Pressable style={styles.fundsButton} onPress={() => navigation.navigate('Funds')}>
+        <Text style={styles.fundsButtonText}>💵 Administrar fondos</Text>
+        <Text style={styles.fundsButtonChevron}>›</Text>
+      </Pressable>
+
       <Text style={styles.label}>Proveedor de IA</Text>
       <View style={styles.providerRow}>
         {AI_PROVIDERS.map((p) => (
@@ -117,6 +125,20 @@ export default function SettingsScreen() {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     container: { flex: 1, padding: 20, backgroundColor: theme.bg },
+    fundsButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: theme.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginBottom: 24,
+    },
+    fundsButtonText: { fontSize: 15, fontWeight: '600', color: theme.text },
+    fundsButtonChevron: { fontSize: 22, color: theme.textMuted },
     label: { fontSize: 14, fontWeight: '600', marginBottom: 8, color: theme.text },
     keyLabel: { marginTop: 24 },
     providerRow: { flexDirection: 'row', gap: 8 },

@@ -1,13 +1,30 @@
-import type { AIProvider, ParsedMovement } from '../types';
-import { parseMovement as parseWithDeepSeek } from './deepseek';
-import { parseMovement as parseWithGemini } from './gemini';
+import type { AIProvider } from '../types';
+import type { AIFundInfo, AIMovementResponse } from './aiTypes';
+import { deepseekComplete } from './deepseek';
+import { geminiComplete } from './gemini';
+import { buildMovementPrompt } from './movementPrompt';
+import { parseAIMovement } from './parseMovementResponse';
 
 export { AIProviderError } from './aiErrors';
+export type { AIMovementResponse, AIFundInfo } from './aiTypes';
+export type { ResolvedAIMovement } from './resolveAIMovement';
+export { resolveAIMovement } from './resolveAIMovement';
 
-export function parseMovement(
+/**
+ * Interpreta una frase en lenguaje natural con el proveedor seleccionado,
+ * informándole los fondos activos y sus alias. Devuelve la respuesta EXTERNA
+ * validada; la resolución de fondos a ids se hace localmente después.
+ */
+export async function parseMovement(
   text: string,
   provider: AIProvider,
-  apiKey: string
-): Promise<ParsedMovement> {
-  return provider === 'gemini' ? parseWithGemini(text, apiKey) : parseWithDeepSeek(text, apiKey);
+  apiKey: string,
+  funds: AIFundInfo[]
+): Promise<AIMovementResponse> {
+  const systemPrompt = buildMovementPrompt(funds);
+  const content =
+    provider === 'gemini'
+      ? await geminiComplete(systemPrompt, text, apiKey)
+      : await deepseekComplete(systemPrompt, text, apiKey);
+  return parseAIMovement(content, text);
 }

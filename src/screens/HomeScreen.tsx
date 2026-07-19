@@ -16,34 +16,45 @@ import {
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   addMovement,
-  getBudgetAlerts,
-  getCurrentMonthTotals,
-  getMovements,
-  getTotals,
-  restoreMovement,
   deleteMovement,
+  getBudgetAlerts,
+  getFunds,
+  getFundsWithBalances,
+  getMovements,
+  getMovementsForFund,
+  getFundStats,
+  getTotalStats,
+  restoreMovement,
   type BudgetAlert,
-  type PeriodTotals,
 } from '../db/database';
+import type { SlideStats } from '../db/balances';
+import { useDb } from '../db/useDb';
 import { getApiKey, getSelectedProvider } from '../services/apiKey';
-import { parseMovement, AIProviderError } from '../services/ai';
+import { parseMovement, resolveAIMovement, AIProviderError } from '../services/ai';
+import { getFundMatchTargets } from '../db/fundsRepo';
+import { computeFundSelection } from '../domain/movementRules';
+import { describeMovement } from '../domain/movementDisplay';
 import { formatCurrency, formatSignedCurrency } from '../utils/format';
 import { CATEGORY_ICON, iconForCategory, colorForCategory } from '../categoryVisuals';
 import { useTheme, type Theme } from '../theme';
 import { MovementRowSkeleton } from '../components/Skeleton';
+import { FundCarousel, type CarouselSlide } from '../components/FundCarousel';
+import { FundSelector, type SelectableFund } from '../components/FundSelector';
 import {
   categoriesForType,
   AI_PROVIDERS,
+  type AIMovementType,
   type AIProvider,
   type Category,
+  type Fund,
+  type FundWithBalance,
   type Movement,
   type MovementType,
-  type ParsedMovement,
+  type NewMovement,
   type RootStackParamList,
 } from '../types';
 
@@ -54,21 +65,33 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 const UNDO_TIMEOUT_MS = 5000;
-const EMPTY_TOTALS: PeriodTotals = { income: 0, expense: 0, balance: 0 };
-const SKELETON_ROWS = 6;
+const SKELETON_ROWS = 5;
 
 function providerLabel(id: AIProvider): string {
   return AI_PROVIDERS.find((p) => p.id === id)?.label ?? id;
 }
 
+interface Preview {
+  type: AIMovementType;
+  amount: string;
+  category: Category | null;
+  description: string;
+  sourceFundId: number | null;
+  destinationFundId: number | null;
+  rawText: string;
+}
+
 export default function HomeScreen({ navigation, route }: Props) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const db = useSQLiteContext();
+  const db = useDb();
+
   const [text, setText] = useState('');
+  const [funds, setFunds] = useState<FundWithBalance[]>([]);
+  const [allFunds, setAllFunds] = useState<Fund[]>([]);
+  const [slides, setSlides] = useState<CarouselSlide[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [movements, setMovements] = useState<Movement[]>([]);
-  const [totals, setTotals] = useState<PeriodTotals>(EMPTY_TOTALS);
-  const [monthTotals, setMonthTotals] = useState<PeriodTotals>(EMPTY_TOTALS);
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -77,33 +100,72 @@ export default function HomeScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<MovementType | null>(null);
-  const [filterCategory, setFilterCategory] = useState<Category | null>(null);
   const [undoMovement, setUndoMovement] = useState<Movement | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
   const swipeableRefs = useRef<Map<number, Swipeable>>(new Map());
+  const [preview, setPreview] = useState<Preview | null>(null);
 
-  const [pending, setPending] = useState<{ parsed: ParsedMovement; rawText: string } | null>(null);
-  const [pendingAmountText, setPendingAmountText] = useState('');
+  const fundNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const f of allFunds) map.set(f.id, f.name);
+    return map;
+  }, [allFunds]);
+
+  const activeSlide = slides[activeIndex];
+  const context = useMemo(
+    () =>
+      activeSlide && activeSlide.kind === 'fund'
+        ? ({ kind: 'fund', fundId: activeSlide.fund.id } as const)
+        : ({ kind: 'total' } as const),
+    [activeSlide]
+  );
+
+  const buildSlides = useCallback(
+    async (activeFunds: FundWithBalance[]): Promise<CarouselSlide[]> => {
+      const totalStats = await getTotalStats(db);
+      const fundStats = await Promise.all(activeFunds.map((f) => getFundStats(db, f.id)));
+      const fundSlides: CarouselSlide[] = activeFunds.map((fund, i) => ({
+        kind: 'fund',
+        fund,
+        stats: fundStats[i],
+      }));
+      return [{ kind: 'total', stats: totalStats }, ...fundSlides];
+    },
+    [db]
+  );
+
+  const loadMovementsForSlide = useCallback(
+    async (slide: CarouselSlide | undefined) => {
+      if (!slide) return;
+      const list =
+        slide.kind === 'fund' ? await getMovementsForFund(db, slide.fund.id) : await getMovements(db);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setMovements(list);
+    },
+    [db]
+  );
 
   const load = useCallback(async () => {
     const provider = await getSelectedProvider();
-    const [list, allTimeTotals, currentMonthTotals, apiKey, alerts] = await Promise.all([
-      getMovements(db),
-      getTotals(db),
-      getCurrentMonthTotals(db),
+    const [activeFunds, everyFund, apiKey, alerts] = await Promise.all([
+      getFundsWithBalances(db, false),
+      getFunds(db, true),
       getApiKey(provider),
       getBudgetAlerts(db),
     ]);
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setMovements(list);
-    setTotals(allTimeTotals);
-    setMonthTotals(currentMonthTotals);
+    const nextSlides = await buildSlides(activeFunds);
+    setFunds(activeFunds);
+    setAllFunds(everyFund);
+    setSlides(nextSlides);
     setActiveProvider(provider);
     setHasApiKey(!!apiKey);
     setBudgetAlerts(alerts);
+    const boundedIndex = Math.min(activeIndex, nextSlides.length - 1);
+    setActiveIndex(boundedIndex);
+    await loadMovementsForSlide(nextSlides[boundedIndex]);
     setInitialLoading(false);
-  }, [db]);
+  }, [db, buildSlides, loadMovementsForSlide, activeIndex]);
 
   useFocusEffect(
     useCallback(() => {
@@ -142,6 +204,11 @@ export default function HomeScreen({ navigation, route }: Props) {
     };
   }, []);
 
+  function handleIndexChange(index: number) {
+    setActiveIndex(index);
+    loadMovementsForSlide(slides[index]);
+  }
+
   async function handleUndo() {
     if (!undoMovement) return;
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -160,40 +227,25 @@ export default function HomeScreen({ navigation, route }: Props) {
     await load();
   }
 
-  const filterCategoryOptions = useMemo(() => {
-    if (filterType) return categoriesForType(filterType);
-    const seen = new Set<string>();
-    const merged: Category[] = [];
-    for (const cat of [...categoriesForType('gasto'), ...categoriesForType('ingreso')]) {
-      if (!seen.has(cat)) {
-        seen.add(cat);
-        merged.push(cat);
-      }
-    }
-    return merged;
-  }, [filterType]);
-
-  function handleSelectFilterType(type: MovementType | null) {
-    setFilterType(type);
-    if (type && filterCategory && !categoriesForType(type).includes(filterCategory)) {
-      setFilterCategory(null);
-    }
-  }
+  const selectableFunds: SelectableFund[] = useMemo(
+    () => funds.map((f) => ({ id: f.id, name: f.name, icon: f.icon, color: f.color })),
+    [funds]
+  );
 
   const filteredMovements = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return movements.filter((item) => {
       if (filterType && item.type !== filterType) return false;
-      if (filterCategory && item.category !== filterCategory) return false;
       if (!query) return true;
       return (
         item.description.toLowerCase().includes(query) ||
-        item.rawText.toLowerCase().includes(query)
+        item.rawText.toLowerCase().includes(query) ||
+        (item.category ?? '').toLowerCase().includes(query)
       );
     });
-  }, [movements, searchQuery, filterType, filterCategory]);
+  }, [movements, searchQuery, filterType]);
 
-  const isFiltering = searchQuery.trim().length > 0 || filterType !== null || filterCategory !== null;
+  const isFiltering = searchQuery.trim().length > 0 || filterType !== null;
 
   async function handleParse() {
     const trimmed = text.trim();
@@ -209,9 +261,27 @@ export default function HomeScreen({ navigation, route }: Props) {
         setActiveProvider(provider);
         return;
       }
-      const parsed = await parseMovement(trimmed, provider, apiKey);
-      setPending({ parsed, rawText: trimmed });
-      setPendingAmountText(String(parsed.amount));
+      const aiFunds = funds.map((f) => ({ name: f.name, aliases: f.aliases.map((a) => a.alias) }));
+      const aiResponse = await parseMovement(trimmed, provider, apiKey, aiFunds);
+      const targets = await getFundMatchTargets(db, true);
+      const resolved = resolveAIMovement(aiResponse, targets);
+
+      const selection = computeFundSelection({
+        type: resolved.type,
+        resolvedSourceId: resolved.sourceFundId,
+        resolvedDestId: resolved.destinationFundId,
+        activeFunds: funds.map((f) => ({ id: f.id, isDefault: f.isDefault })),
+      });
+
+      setPreview({
+        type: resolved.type,
+        amount: String(resolved.amount),
+        category: resolved.category,
+        description: resolved.description,
+        sourceFundId: selection.sourceFundId,
+        destinationFundId: selection.destinationFundId,
+        rawText: trimmed,
+      });
       setText('');
     } catch (err) {
       setError(err instanceof AIProviderError ? err.message : 'Ocurrió un error inesperado.');
@@ -220,67 +290,133 @@ export default function HomeScreen({ navigation, route }: Props) {
     }
   }
 
-  async function handleConfirmPending() {
-    if (!pending) return;
-    const amount = Number(pendingAmountText.replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) {
+  const previewSelection = useMemo(() => {
+    if (!preview) return null;
+    return computeFundSelection({
+      type: preview.type,
+      resolvedSourceId: preview.sourceFundId,
+      resolvedDestId: preview.destinationFundId,
+      activeFunds: funds.map((f) => ({ id: f.id, isDefault: f.isDefault })),
+    });
+  }, [preview, funds]);
+
+  const previewAmountValue = preview ? Number(preview.amount.replace(',', '.')) : 0;
+  const previewAmountValid = Number.isFinite(previewAmountValue) && previewAmountValue > 0;
+
+  const negativeWarning = useMemo(() => {
+    if (!preview || !previewAmountValid) return null;
+    const sourceId = preview.sourceFundId;
+    if (sourceId == null) return null;
+    const fund = funds.find((f) => f.id === sourceId);
+    if (!fund) return null;
+    if (fund.balance - previewAmountValue < 0) {
+      return `${fund.name} quedará en negativo (${formatCurrency(fund.balance - previewAmountValue)}).`;
+    }
+    return null;
+  }, [preview, funds, previewAmountValid, previewAmountValue]);
+
+  function updatePreview(patch: Partial<Preview>) {
+    setPreview((prev) => (prev ? { ...prev, ...patch } : prev));
+  }
+
+  function handlePreviewType(nextType: AIMovementType) {
+    if (!preview) return;
+    const category =
+      nextType === 'transferencia'
+        ? null
+        : preview.category && categoriesForType(nextType).includes(preview.category)
+          ? preview.category
+          : categoriesForType(nextType)[0];
+    // Reasignar fondos según el nuevo tipo (auto-asignar si hay un solo fondo).
+    const selection = computeFundSelection({
+      type: nextType,
+      resolvedSourceId: nextType === 'ingreso' ? null : preview.sourceFundId,
+      resolvedDestId: nextType === 'gasto' ? null : preview.destinationFundId,
+      activeFunds: funds.map((f) => ({ id: f.id, isDefault: f.isDefault })),
+    });
+    updatePreview({
+      type: nextType,
+      category,
+      sourceFundId: selection.sourceFundId,
+      destinationFundId: selection.destinationFundId,
+    });
+  }
+
+  function handleCancelPreview() {
+    if (!preview) return;
+    setText(preview.rawText);
+    setPreview(null);
+  }
+
+  async function handleConfirmPreview() {
+    if (!preview || !previewSelection) return;
+    if (!previewAmountValid) {
       setError('Ingresá un monto válido mayor a 0.');
       return;
     }
-    const finalParsed: ParsedMovement = { ...pending.parsed, amount };
-    await addMovement(db, finalParsed, pending.rawText);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setPending(null);
-    setPendingAmountText('');
-    await load();
+    if (!previewSelection.canConfirm) return;
+
+    let movement: NewMovement;
+    if (preview.type === 'gasto') {
+      movement = {
+        type: 'gasto',
+        amount: previewAmountValue,
+        category: preview.category ?? 'Otros',
+        description: preview.description.trim() || preview.rawText,
+        rawText: preview.rawText,
+        sourceFundId: preview.sourceFundId,
+        destinationFundId: null,
+      };
+    } else if (preview.type === 'ingreso') {
+      movement = {
+        type: 'ingreso',
+        amount: previewAmountValue,
+        category: preview.category ?? 'Otros',
+        description: preview.description.trim() || preview.rawText,
+        rawText: preview.rawText,
+        sourceFundId: null,
+        destinationFundId: preview.destinationFundId,
+      };
+    } else {
+      movement = {
+        type: 'transferencia',
+        amount: previewAmountValue,
+        category: null,
+        description: preview.description.trim() || preview.rawText,
+        rawText: preview.rawText,
+        sourceFundId: preview.sourceFundId,
+        destinationFundId: preview.destinationFundId,
+      };
+    }
+
+    try {
+      await addMovement(db, movement);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPreview(null);
+      setError(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar el movimiento.');
+    }
   }
 
-  function handleCancelPending() {
-    if (!pending) return;
-    setText(pending.rawText);
-    setPending(null);
-    setPendingAmountText('');
-  }
-
-  function handleSelectPendingType(nextType: MovementType) {
-    if (!pending) return;
-    const nextCategory = categoriesForType(nextType).includes(pending.parsed.category)
-      ? pending.parsed.category
-      : categoriesForType(nextType)[0];
-    setPending({ ...pending, parsed: { ...pending.parsed, type: nextType, category: nextCategory } });
-  }
-
-  function handleSelectPendingCategory(category: Category) {
-    if (!pending) return;
-    setPending({ ...pending, parsed: { ...pending.parsed, category } });
-  }
+  const showCategoryChips = preview && preview.type !== 'transferencia';
+  const showSourceSelector = preview && (preview.type === 'gasto' || preview.type === 'transferencia');
+  const showDestSelector = preview && (preview.type === 'ingreso' || preview.type === 'transferencia');
 
   return (
     <KeyboardAvoidingView
       style={[styles.flex, Platform.OS === 'android' && { paddingBottom: androidKeyboardHeight }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
-        <Text style={styles.totalLabel}>Balance total</Text>
-        <Text style={[styles.totalValue, totals.balance < 0 && styles.negativeValue]}>
-          {formatCurrency(totals.balance)}
-        </Text>
-        <Text style={styles.breakdownText}>
-          Ingresos {formatCurrency(totals.income)} · Gastos {formatCurrency(totals.expense)}
-        </Text>
-        <Text style={styles.monthTotal}>Balance de este mes: {formatCurrency(monthTotals.balance)}</Text>
-        <View style={styles.headerButtons}>
-          <Pressable onPress={() => navigation.navigate('Summary')} style={styles.linkButton}>
-            <Text style={styles.linkButtonText}>Resumen</Text>
-          </Pressable>
-          <Pressable onPress={() => navigation.navigate('Budgets')} style={styles.linkButton}>
-            <Text style={styles.linkButtonText}>Presupuestos</Text>
-          </Pressable>
-          <Pressable onPress={() => navigation.navigate('Settings')} style={styles.linkButton}>
-            <Text style={styles.linkButtonText}>Configuración</Text>
-          </Pressable>
-        </View>
-      </View>
+      {!initialLoading && slides.length > 0 ? (
+        <FundCarousel
+          slides={slides}
+          activeIndex={Math.min(activeIndex, slides.length - 1)}
+          onIndexChange={handleIndexChange}
+          onAddFund={() => navigation.navigate('FundEditor', undefined)}
+        />
+      ) : null}
 
       {!initialLoading && !hasApiKey ? (
         <Pressable style={styles.apiKeyBanner} onPress={() => navigation.navigate('Settings')}>
@@ -316,59 +452,22 @@ export default function HomeScreen({ navigation, route }: Props) {
                 { label: 'Todos', value: null },
                 { label: 'Gastos', value: 'gasto' as MovementType },
                 { label: 'Ingresos', value: 'ingreso' as MovementType },
+                { label: 'Transfer.', value: 'transferencia' as MovementType },
               ] as const
             ).map((opt) => (
               <Pressable
                 key={opt.label}
                 style={[styles.typeChip, filterType === opt.value && styles.typeChipSelected]}
-                onPress={() => handleSelectFilterType(opt.value)}
+                onPress={() => setFilterType(opt.value)}
               >
                 <Text
-                  style={[
-                    styles.typeChipText,
-                    filterType === opt.value && styles.typeChipTextSelected,
-                  ]}
+                  style={[styles.typeChipText, filterType === opt.value && styles.typeChipTextSelected]}
                 >
                   {opt.label}
                 </Text>
               </Pressable>
             ))}
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryFilterRow}
-          >
-            <Pressable
-              style={[styles.categoryChip, filterCategory === null && styles.categoryChipSelected]}
-              onPress={() => setFilterCategory(null)}
-            >
-              <Text
-                style={[
-                  styles.categoryChipText,
-                  filterCategory === null && styles.categoryChipTextSelected,
-                ]}
-              >
-                Todas
-              </Text>
-            </Pressable>
-            {filterCategoryOptions.map((cat) => (
-              <Pressable
-                key={cat}
-                style={[styles.categoryChip, filterCategory === cat && styles.categoryChipSelected]}
-                onPress={() => setFilterCategory(filterCategory === cat ? null : cat)}
-              >
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    filterCategory === cat && styles.categoryChipTextSelected,
-                  ]}
-                >
-                  {CATEGORY_ICON[cat]} {cat}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
         </View>
       ) : null}
 
@@ -379,57 +478,80 @@ export default function HomeScreen({ navigation, route }: Props) {
           ))}
         </View>
       ) : (
-      <FlatList
-        style={styles.flex}
-        contentContainerStyle={styles.listContent}
-        data={filteredMovements}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <Swipeable
-            ref={(ref) => {
-              if (ref) swipeableRefs.current.set(item.id, ref);
-              else swipeableRefs.current.delete(item.id);
-            }}
-            renderRightActions={() => (
-              <Pressable style={styles.deleteAction} onPress={() => handleSwipeDelete(item)}>
-                <Text style={styles.deleteActionText}>Eliminar</Text>
-              </Pressable>
-            )}
-          >
-            <Pressable
-              style={styles.movementRow}
-              onPress={() => navigation.navigate('MovementDetail', { movementId: item.id })}
-            >
-              <Text style={styles.movementIcon}>{iconForCategory(item.category)}</Text>
-              <View style={styles.flex}>
-                <Text style={styles.movementDescription}>{item.description}</Text>
-                <View style={styles.movementMetaRow}>
-                  <View
-                    style={[
-                      styles.categoryDot,
-                      { backgroundColor: colorForCategory(item.category, theme.scheme) },
-                    ]}
-                  />
-                  <Text style={styles.movementCategory}>{item.category}</Text>
-                  <Text style={styles.movementDate}>
-                    {new Date(item.createdAt).toLocaleDateString()}
+        <FlatList
+          style={styles.flex}
+          contentContainerStyle={styles.listContent}
+          data={filteredMovements}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => {
+            const display = describeMovement(item, context, (id) => fundNameById.get(id) ?? 'Fondo');
+            const amountColor =
+              display.neutral || display.signedAmount == null
+                ? theme.textSecondary
+                : display.signedAmount >= 0
+                  ? theme.success
+                  : theme.danger;
+            return (
+              <Swipeable
+                ref={(ref) => {
+                  if (ref) swipeableRefs.current.set(item.id, ref);
+                  else swipeableRefs.current.delete(item.id);
+                }}
+                renderRightActions={() => (
+                  <Pressable style={styles.deleteAction} onPress={() => handleSwipeDelete(item)}>
+                    <Text style={styles.deleteActionText}>Eliminar</Text>
+                  </Pressable>
+                )}
+              >
+                <Pressable
+                  style={styles.movementRow}
+                  onPress={() => navigation.navigate('MovementDetail', { movementId: item.id })}
+                >
+                  <Text style={styles.movementIcon}>
+                    {item.type === 'transferencia'
+                      ? '🔁'
+                      : item.type === 'ajuste'
+                        ? '⚖️'
+                        : iconForCategory(item.category ?? 'Otros')}
                   </Text>
-                </View>
-              </View>
-              <Text style={[styles.movementAmount, item.type === 'ingreso' && styles.incomeAmount]}>
-                {formatSignedCurrency(item.amount, item.type)}
-              </Text>
-            </Pressable>
-          </Swipeable>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {isFiltering
-              ? 'No se encontraron movimientos que coincidan con el filtro.'
-              : 'Todavía no registraste movimientos. Probá escribir algo como "gasté 15 dólares en un café" o "cobré el sueldo".'}
-          </Text>
-        }
-      />
+                  <View style={styles.flex}>
+                    <Text style={styles.movementDescription}>{item.description}</Text>
+                    <View style={styles.movementMetaRow}>
+                      {item.category ? (
+                        <View
+                          style={[
+                            styles.categoryDot,
+                            { backgroundColor: colorForCategory(item.category, theme.scheme) },
+                          ]}
+                        />
+                      ) : null}
+                      <Text style={styles.movementCategory}>
+                        {display.contextNote ?? display.label}
+                      </Text>
+                      <Text style={styles.movementDate}>
+                        {new Date(item.createdAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.movementAmount, { color: amountColor }]}>
+                    {display.signedAmount == null
+                      ? formatCurrency(item.amount)
+                      : formatSignedCurrency(display.signedAmount)}
+                  </Text>
+                </Pressable>
+              </Swipeable>
+            );
+          }}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>
+              {isFiltering
+                ? 'No se encontraron movimientos que coincidan con el filtro.'
+                : context.kind === 'fund'
+                  ? 'Este fondo todavía no tiene movimientos.'
+                  : 'Todavía no registraste movimientos. Probá escribir algo como "gasté 15 en un café" o "pasé 20000 de efectivo a MP".'}
+            </Text>
+          }
+        />
       )}
 
       {undoMovement ? (
@@ -443,74 +565,110 @@ export default function HomeScreen({ navigation, route }: Props) {
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {pending ? (
-        <View style={styles.previewCard}>
+      {preview ? (
+        <ScrollView style={styles.previewCard} keyboardShouldPersistTaps="handled">
           <View style={styles.typeRow}>
-            {(['gasto', 'ingreso'] as const).map((t) => (
+            {(['gasto', 'ingreso', 'transferencia'] as const).map((t) => (
               <Pressable
                 key={t}
-                style={[styles.typeChip, pending.parsed.type === t && styles.typeChipSelected]}
-                onPress={() => handleSelectPendingType(t)}
+                style={[styles.typeChip, preview.type === t && styles.typeChipSelected]}
+                onPress={() => handlePreviewType(t)}
               >
-                <Text
-                  style={[
-                    styles.typeChipText,
-                    pending.parsed.type === t && styles.typeChipTextSelected,
-                  ]}
-                >
-                  {t === 'gasto' ? 'Gasto' : 'Ingreso'}
+                <Text style={[styles.typeChipText, preview.type === t && styles.typeChipTextSelected]}>
+                  {t === 'gasto' ? 'Gasto' : t === 'ingreso' ? 'Ingreso' : 'Transfer.'}
                 </Text>
               </Pressable>
             ))}
             <TextInput
               style={styles.previewAmountInput}
-              value={pendingAmountText}
-              onChangeText={setPendingAmountText}
+              value={preview.amount}
+              onChangeText={(v) => updatePreview({ amount: v })}
               keyboardType="decimal-pad"
             />
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryFilterRow}
-          >
-            {categoriesForType(pending.parsed.type).map((cat) => (
-              <Pressable
-                key={cat}
-                style={[
-                  styles.categoryChip,
-                  pending.parsed.category === cat && styles.categoryChipSelected,
-                ]}
-                onPress={() => handleSelectPendingCategory(cat)}
-              >
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    pending.parsed.category === cat && styles.categoryChipTextSelected,
-                  ]}
+
+          {showCategoryChips ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryRow}
+            >
+              {categoriesForType(preview.type as 'gasto' | 'ingreso').map((cat) => (
+                <Pressable
+                  key={cat}
+                  style={[styles.categoryChip, preview.category === cat && styles.categoryChipSelected]}
+                  onPress={() => updatePreview({ category: cat })}
                 >
-                  {CATEGORY_ICON[cat]} {cat}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-          <Text style={styles.previewDescription} numberOfLines={1}>
-            {pending.parsed.description}
-          </Text>
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      preview.category === cat && styles.categoryChipTextSelected,
+                    ]}
+                  >
+                    {CATEGORY_ICON[cat]} {cat}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+
+          {previewSelection?.blockingMessage ? (
+            <Text style={styles.blockingText}>{previewSelection.blockingMessage}</Text>
+          ) : null}
+
+          {showSourceSelector ? (
+            <FundSelector
+              label={preview.type === 'transferencia' ? '¿Desde qué fondo?' : '¿Desde qué fondo se pagó?'}
+              funds={selectableFunds}
+              selectedId={preview.sourceFundId}
+              onSelect={(id) => updatePreview({ sourceFundId: id })}
+              excludeId={preview.type === 'transferencia' ? preview.destinationFundId : null}
+              required
+            />
+          ) : null}
+
+          {showDestSelector ? (
+            <FundSelector
+              label={preview.type === 'transferencia' ? '¿Hacia qué fondo?' : '¿A qué fondo ingresó?'}
+              funds={selectableFunds}
+              selectedId={preview.destinationFundId}
+              onSelect={(id) => updatePreview({ destinationFundId: id })}
+              excludeId={preview.type === 'transferencia' ? preview.sourceFundId : null}
+              required
+            />
+          ) : null}
+
+          <TextInput
+            style={styles.previewDescriptionInput}
+            value={preview.description}
+            onChangeText={(v) => updatePreview({ description: v })}
+            placeholder="Descripción"
+            placeholderTextColor={theme.textMuted}
+          />
+
+          {negativeWarning ? <Text style={styles.warningText}>⚠️ {negativeWarning}</Text> : null}
+
           <View style={styles.previewActions}>
-            <Pressable style={styles.previewCancelButton} onPress={handleCancelPending}>
+            <Pressable style={styles.previewCancelButton} onPress={handleCancelPreview}>
               <Text style={styles.previewCancelText}>Cancelar</Text>
             </Pressable>
-            <Pressable style={styles.previewConfirmButton} onPress={handleConfirmPending}>
+            <Pressable
+              style={[
+                styles.previewConfirmButton,
+                (!previewSelection?.canConfirm || !previewAmountValid) && styles.buttonDisabled,
+              ]}
+              onPress={handleConfirmPreview}
+              disabled={!previewSelection?.canConfirm || !previewAmountValid}
+            >
               <Text style={styles.previewConfirmText}>Confirmar</Text>
             </Pressable>
           </View>
-        </View>
+        </ScrollView>
       ) : (
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
-            placeholder="Ej: pagué 20 de nafta / cobré el sueldo"
+            placeholder='Ej: "pagué 20 de nafta con MP"'
             placeholderTextColor={theme.textMuted}
             value={text}
             onChangeText={setText}
@@ -519,7 +677,7 @@ export default function HomeScreen({ navigation, route }: Props) {
             returnKeyType="send"
           />
           <Pressable
-            style={[styles.addButton, loading && styles.addButtonDisabled]}
+            style={[styles.addButton, loading && styles.buttonDisabled]}
             onPress={handleParse}
             disabled={loading}
           >
@@ -538,34 +696,13 @@ export default function HomeScreen({ navigation, route }: Props) {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     flex: { flex: 1, backgroundColor: theme.bg },
-    header: {
-      padding: 20,
-      paddingTop: 12,
-      backgroundColor: theme.surface,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.border,
-    },
-    totalLabel: { fontSize: 14, color: theme.textSecondary },
-    totalValue: { fontSize: 34, fontWeight: '700', marginTop: 4, color: theme.text },
-    negativeValue: { color: theme.danger },
-    breakdownText: { fontSize: 13, color: theme.textSecondary, marginTop: 4 },
-    monthTotal: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
-    headerButtons: { flexDirection: 'row', gap: 16, marginTop: 12, flexWrap: 'wrap' },
-    apiKeyBanner: {
-      backgroundColor: theme.warningBg,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-    },
+    apiKeyBanner: { backgroundColor: theme.warningBg, paddingHorizontal: 16, paddingVertical: 10 },
     apiKeyBannerText: { color: theme.warningText, fontSize: 13 },
-    budgetAlertBanner: {
-      backgroundColor: theme.dangerBg,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-    },
+    budgetAlertBanner: { backgroundColor: theme.dangerBg, paddingHorizontal: 16, paddingVertical: 10 },
     budgetAlertText: { color: theme.dangerText, fontSize: 13 },
     filterSection: {
       paddingHorizontal: 16,
-      paddingTop: 12,
+      paddingTop: 8,
       backgroundColor: theme.bg,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.border,
@@ -581,50 +718,23 @@ function createStyles(theme: Theme) {
       fontSize: 14,
       marginBottom: 10,
     },
-    typeFilterRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+    typeFilterRow: { flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: 'wrap' },
     typeChip: {
-      borderWidth: 1,
-      borderColor: theme.border,
-      borderRadius: 16,
-      paddingHorizontal: 14,
-      paddingVertical: 6,
-    },
-    typeChipSelected: { backgroundColor: theme.chipSelectedBg, borderColor: theme.chipSelectedBg },
-    typeChipText: { fontSize: 13, color: theme.text, fontWeight: '600' },
-    typeChipTextSelected: { color: theme.chipSelectedText },
-    categoryFilterRow: { gap: 8, paddingBottom: 12 },
-    categoryChip: {
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,
       paddingHorizontal: 12,
       paddingVertical: 6,
     },
-    categoryChipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
-    categoryChipText: { fontSize: 13, color: theme.text },
-    categoryChipTextSelected: { color: theme.primaryText, fontWeight: '600' },
-    undoBanner: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      backgroundColor: theme.undoBg,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      marginHorizontal: 16,
-      marginBottom: 8,
-      borderRadius: 10,
-    },
-    undoText: { color: theme.undoText, fontSize: 14 },
-    undoButtonText: { color: theme.undoAction, fontWeight: '700', fontSize: 14 },
-    linkButton: { paddingVertical: 4 },
-    linkButtonText: { color: theme.primary, fontWeight: '600' },
+    typeChipSelected: { backgroundColor: theme.chipSelectedBg, borderColor: theme.chipSelectedBg },
+    typeChipText: { fontSize: 13, color: theme.text, fontWeight: '600' },
+    typeChipTextSelected: { color: theme.chipSelectedText },
     listContent: { padding: 16, flexGrow: 1 },
     deleteAction: {
       backgroundColor: theme.danger,
       justifyContent: 'center',
       alignItems: 'flex-end',
       paddingHorizontal: 20,
-      marginBottom: 0,
     },
     deleteActionText: { color: '#fff', fontWeight: '700' },
     movementRow: {
@@ -642,10 +752,22 @@ function createStyles(theme: Theme) {
     categoryDot: { width: 7, height: 7, borderRadius: 4 },
     movementCategory: { fontSize: 12, color: theme.textSecondary },
     movementDate: { fontSize: 12, color: theme.textMuted, marginLeft: 4 },
-    movementAmount: { fontSize: 16, fontWeight: '700', color: theme.danger },
-    incomeAmount: { color: theme.success },
+    movementAmount: { fontSize: 16, fontWeight: '700' },
     emptyText: { textAlign: 'center', color: theme.textMuted, marginTop: 40, paddingHorizontal: 20 },
     errorText: { color: theme.danger, paddingHorizontal: 16, paddingBottom: 4 },
+    undoBanner: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: theme.undoBg,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      marginHorizontal: 16,
+      marginBottom: 8,
+      borderRadius: 10,
+    },
+    undoText: { color: theme.undoText, fontSize: 14 },
+    undoButtonText: { color: theme.undoAction, fontWeight: '700', fontSize: 14 },
     inputRow: {
       flexDirection: 'row',
       padding: 16,
@@ -672,9 +794,10 @@ function createStyles(theme: Theme) {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    addButtonDisabled: { opacity: 0.6 },
+    buttonDisabled: { opacity: 0.5 },
     addButtonText: { color: theme.primaryText, fontWeight: '700' },
     previewCard: {
+      maxHeight: 340,
       padding: 16,
       backgroundColor: theme.surface,
       borderTopWidth: StyleSheet.hairlineWidth,
@@ -688,14 +811,37 @@ function createStyles(theme: Theme) {
       backgroundColor: theme.bg,
       color: theme.text,
       borderRadius: 10,
-      paddingHorizontal: 14,
+      paddingHorizontal: 12,
       paddingVertical: 8,
       fontSize: 16,
       textAlign: 'right',
       fontWeight: '700',
     },
-    previewDescription: { fontSize: 13, color: theme.textSecondary, fontStyle: 'italic', marginTop: 4 },
-    previewActions: { flexDirection: 'row', gap: 8, marginTop: 14 },
+    categoryRow: { gap: 8, paddingBottom: 8 },
+    categoryChip: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    categoryChipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
+    categoryChipText: { fontSize: 13, color: theme.text },
+    categoryChipTextSelected: { color: theme.primaryText, fontWeight: '600' },
+    blockingText: { color: theme.warningText, fontSize: 13, marginTop: 8 },
+    warningText: { color: theme.warningText, fontSize: 13, marginTop: 10 },
+    previewDescriptionInput: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.bg,
+      color: theme.text,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      fontSize: 14,
+      marginTop: 12,
+    },
+    previewActions: { flexDirection: 'row', gap: 8, marginTop: 14, marginBottom: 8 },
     previewCancelButton: {
       flex: 1,
       paddingVertical: 12,
