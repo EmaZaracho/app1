@@ -86,7 +86,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
   function handleDelete() {
     Alert.alert(
       'Eliminar gasto',
-      '¿Seguro que querés eliminar este gasto? Esta acción no se puede deshacer.',
+      '¿Seguro que querés eliminar este gasto?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -95,7 +95,7 @@ export default function ExpenseDetailScreen({ route, navigation }: Props) {
           onPress: async () => {
             await deleteExpense(db, expenseId);
             leavingRef.current = true;
-            navigation.goBack();
+            navigation.navigate('Home', { deletedExpense: expense ?? undefined });
           },
         },
       ]

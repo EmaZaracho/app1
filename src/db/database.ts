@@ -71,6 +71,13 @@ export async function deleteExpense(db: SQLiteDatabase, id: number): Promise<voi
   await db.runAsync('DELETE FROM expenses WHERE id = ?', [id]);
 }
 
+export async function restoreExpense(db: SQLiteDatabase, expense: Expense): Promise<void> {
+  await db.runAsync(
+    'INSERT INTO expenses (id, amount, category, description, raw_text, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [expense.id, expense.amount, expense.category, expense.description, expense.rawText, expense.createdAt]
+  );
+}
+
 export interface CategoryTotal {
   category: Category;
   total: number;
