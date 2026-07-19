@@ -15,14 +15,22 @@
     "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "typescript": "~5.9.2"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
+  },
+  "overrides": {
+    "jest-mock": "^30.4.1"
   },
   "private": true
 }

@@ -53,6 +53,14 @@ export interface Budget {
   monthlyLimit: number;
 }
 
+export const API_PROVIDERS = ['deepseek', 'gemini'] as const;
+export type ApiProvider = (typeof API_PROVIDERS)[number];
+
+export const PROVIDER_LABELS: Record<ApiProvider, string> = {
+  deepseek: 'DeepSeek',
+  gemini: 'Gemini',
+};
+
 export type RootStackParamList = {
   Home: { deletedMovement?: Movement } | undefined;
   Summary: undefined;

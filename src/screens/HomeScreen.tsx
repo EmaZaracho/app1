@@ -24,11 +24,13 @@ import {
   type BudgetAlert,
   type PeriodTotals,
 } from '../db/database';
-import { getApiKey } from '../services/apiKey';
-import { parseMovement, DeepSeekError } from '../services/deepseek';
+import { getActiveProvider, getApiKey } from '../services/apiKey';
+import { parseMovementWithProvider, MovementParseError } from '../services/movementParser';
 import { formatCurrency, formatSignedCurrency } from '../utils/format';
 import {
   categoriesForType,
+  PROVIDER_LABELS,
+  type ApiProvider,
   type Category,
   type Movement,
   type MovementType,
@@ -50,6 +52,7 @@ export default function HomeScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [hasApiKey, setHasApiKey] = useState(true);
+  const [activeProvider, setActiveProviderState] = useState<ApiProvider>('deepseek');
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<MovementType | null>(null);
@@ -58,16 +61,18 @@ export default function HomeScreen({ navigation, route }: Props) {
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
-    const [list, allTimeTotals, currentMonthTotals, apiKey, alerts] = await Promise.all([
+    const [list, allTimeTotals, currentMonthTotals, provider, alerts] = await Promise.all([
       getMovements(db),
       getTotals(db),
       getCurrentMonthTotals(db),
-      getApiKey(),
+      getActiveProvider(),
       getBudgetAlerts(db),
     ]);
+    const apiKey = await getApiKey(provider);
     setMovements(list);
     setTotals(allTimeTotals);
     setMonthTotals(currentMonthTotals);
+    setActiveProviderState(provider);
     setHasApiKey(!!apiKey);
     setBudgetAlerts(alerts);
     setInitialLoading(false);
@@ -144,18 +149,19 @@ export default function HomeScreen({ navigation, route }: Props) {
     setError(null);
     setLoading(true);
     try {
-      const apiKey = await getApiKey();
+      const provider = await getActiveProvider();
+      const apiKey = await getApiKey(provider);
       if (!apiKey) {
-        setError('Configurá tu API key de DeepSeek antes de agregar movimientos.');
+        setError(`Configurá tu API key de ${PROVIDER_LABELS[provider]} antes de agregar movimientos.`);
         setHasApiKey(false);
         return;
       }
-      const parsed = await parseMovement(trimmed, apiKey);
+      const parsed = await parseMovementWithProvider(trimmed, provider, apiKey);
       await addMovement(db, parsed, trimmed);
       setText('');
       await load();
     } catch (err) {
-      setError(err instanceof DeepSeekError ? err.message : 'Ocurrió un error inesperado.');
+      setError(err instanceof MovementParseError ? err.message : 'Ocurrió un error inesperado.');
     } finally {
       setLoading(false);
     }
@@ -191,8 +197,8 @@ export default function HomeScreen({ navigation, route }: Props) {
       {!initialLoading && !hasApiKey ? (
         <Pressable style={styles.apiKeyBanner} onPress={() => navigation.navigate('Settings')}>
           <Text style={styles.apiKeyBannerText}>
-            Configurá tu API key de DeepSeek para poder agregar movimientos. Tocá acá para ir a
-            Configuración.
+            Configurá tu API key de {PROVIDER_LABELS[activeProvider]} para poder agregar
+            movimientos. Tocá acá para ir a Configuración.
           </Text>
         </Pressable>
       ) : null}
