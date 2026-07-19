@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from '@react-navigation/native';
 import { getTotalsByCategory, type CategoryTotal } from '../db/database';
+import { formatCurrency } from '../utils/format';
 
 export default function SummaryScreen() {
   const db = useSQLiteContext();
@@ -28,7 +29,7 @@ export default function SummaryScreen() {
             <View style={styles.row}>
               <View style={styles.rowHeader}>
                 <Text style={styles.category}>{item.category}</Text>
-                <Text style={styles.amount}>${item.total.toFixed(2)}</Text>
+                <Text style={styles.amount}>{formatCurrency(item.total)}</Text>
               </View>
               <View style={styles.barTrack}>
                 <View style={[styles.barFill, { width: `${pct}%` }]} />

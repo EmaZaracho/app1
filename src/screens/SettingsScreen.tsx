@@ -22,9 +22,23 @@ export default function SettingsScreen() {
     setTimeout(() => setSaved(false), 2000);
   }
 
-  async function handleClear() {
-    await clearApiKey();
-    setKey('');
+  function handleClear() {
+    if (!key) return;
+    Alert.alert(
+      'Borrar API key',
+      'Sin la API key no vas a poder agregar nuevos gastos hasta que cargues otra. ¿Querés borrarla?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Borrar',
+          style: 'destructive',
+          onPress: async () => {
+            await clearApiKey();
+            setKey('');
+          },
+        },
+      ]
+    );
   }
 
   return (

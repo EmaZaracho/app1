@@ -27,7 +27,8 @@ export interface ParsedExpense {
 }
 
 export type RootStackParamList = {
-  Home: undefined;
+  Home: { deletedExpense?: Expense } | undefined;
   Summary: undefined;
   Settings: undefined;
+  ExpenseDetail: { expenseId: number };
 };

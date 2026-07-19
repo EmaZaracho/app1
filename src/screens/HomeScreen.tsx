@@ -1,10 +1,11 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,25 +14,49 @@ import {
 import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { addExpense, getExpenses, getGrandTotal } from '../db/database';
+import {
+  addExpense,
+  getCurrentMonthTotal,
+  getExpenses,
+  getGrandTotal,
+  restoreExpense,
+} from '../db/database';
 import { getApiKey } from '../services/apiKey';
 import { parseExpense, DeepSeekError } from '../services/deepseek';
-import type { Expense, RootStackParamList } from '../types';
+import { formatCurrency } from '../utils/format';
+import { CATEGORIES, type Category, type Expense, type RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
-export default function HomeScreen({ navigation }: Props) {
+const UNDO_TIMEOUT_MS = 5000;
+
+export default function HomeScreen({ navigation, route }: Props) {
   const db = useSQLiteContext();
   const [text, setText] = useState('');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [total, setTotal] = useState(0);
+  const [monthTotal, setMonthTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [hasApiKey, setHasApiKey] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState<Category | null>(null);
+  const [undoExpense, setUndoExpense] = useState<Expense | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
-    const [list, grandTotal] = await Promise.all([getExpenses(db), getGrandTotal(db)]);
+    const [list, grandTotal, currentMonthTotal, apiKey] = await Promise.all([
+      getExpenses(db),
+      getGrandTotal(db),
+      getCurrentMonthTotal(db),
+      getApiKey(),
+    ]);
     setExpenses(list);
     setTotal(grandTotal);
+    setMonthTotal(currentMonthTotal);
+    setHasApiKey(!!apiKey);
+    setInitialLoading(false);
   }, [db]);
 
   useFocusEffect(
@@ -39,6 +64,44 @@ export default function HomeScreen({ navigation }: Props) {
       load();
     }, [load])
   );
+
+  useEffect(() => {
+    const deleted = route.params?.deletedExpense;
+    if (!deleted) return;
+    navigation.setParams({ deletedExpense: undefined });
+    setUndoExpense(deleted);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setUndoExpense(null), UNDO_TIMEOUT_MS);
+  }, [route.params?.deletedExpense, navigation]);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
+  async function handleUndo() {
+    if (!undoExpense) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const toRestore = undoExpense;
+    setUndoExpense(null);
+    await restoreExpense(db, toRestore);
+    await load();
+  }
+
+  const filteredExpenses = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return expenses.filter((item) => {
+      if (filterCategory && item.category !== filterCategory) return false;
+      if (!query) return true;
+      return (
+        item.description.toLowerCase().includes(query) ||
+        item.rawText.toLowerCase().includes(query)
+      );
+    });
+  }, [expenses, searchQuery, filterCategory]);
+
+  const isFiltering = searchQuery.trim().length > 0 || filterCategory !== null;
 
   async function handleAdd() {
     const trimmed = text.trim();
@@ -49,6 +112,7 @@ export default function HomeScreen({ navigation }: Props) {
       const apiKey = await getApiKey();
       if (!apiKey) {
         setError('Configurá tu API key de DeepSeek antes de agregar gastos.');
+        setHasApiKey(false);
         return;
       }
       const parsed = await parseExpense(trimmed, apiKey);
@@ -65,11 +129,12 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.header}>
         <Text style={styles.totalLabel}>Total gastado</Text>
-        <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+        <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+        <Text style={styles.monthTotal}>Este mes: {formatCurrency(monthTotal)}</Text>
         <View style={styles.headerButtons}>
           <Pressable onPress={() => navigation.navigate('Summary')} style={styles.linkButton}>
             <Text style={styles.linkButtonText}>Resumen</Text>
@@ -80,13 +145,76 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       </View>
 
+      {!initialLoading && !hasApiKey ? (
+        <Pressable style={styles.apiKeyBanner} onPress={() => navigation.navigate('Settings')}>
+          <Text style={styles.apiKeyBannerText}>
+            Configurá tu API key de DeepSeek para poder agregar gastos. Tocá acá para ir a Configuración.
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {!initialLoading && expenses.length > 0 ? (
+        <View style={styles.filterSection}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar gastos..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryFilterRow}
+          >
+            <Pressable
+              style={[styles.categoryChip, filterCategory === null && styles.categoryChipSelected]}
+              onPress={() => setFilterCategory(null)}
+            >
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  filterCategory === null && styles.categoryChipTextSelected,
+                ]}
+              >
+                Todas
+              </Text>
+            </Pressable>
+            {CATEGORIES.map((cat) => (
+              <Pressable
+                key={cat}
+                style={[styles.categoryChip, filterCategory === cat && styles.categoryChipSelected]}
+                onPress={() => setFilterCategory(filterCategory === cat ? null : cat)}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    filterCategory === cat && styles.categoryChipTextSelected,
+                  ]}
+                >
+                  {cat}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+
+      {initialLoading ? (
+        <View style={styles.initialLoadingContainer}>
+          <ActivityIndicator />
+        </View>
+      ) : (
       <FlatList
         style={styles.flex}
         contentContainerStyle={styles.listContent}
-        data={expenses}
+        data={filteredExpenses}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
-          <View style={styles.expenseRow}>
+          <Pressable
+            style={styles.expenseRow}
+            onPress={() => navigation.navigate('ExpenseDetail', { expenseId: item.id })}
+          >
             <View style={styles.flex}>
               <Text style={styles.expenseDescription}>{item.description}</Text>
               <View style={styles.expenseMetaRow}>
@@ -96,15 +224,27 @@ export default function HomeScreen({ navigation }: Props) {
                 </Text>
               </View>
             </View>
-            <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
-          </View>
+            <Text style={styles.expenseAmount}>{formatCurrency(item.amount)}</Text>
+          </Pressable>
         )}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            Todavía no registraste gastos. Probá escribir algo como "gasté 15 dólares en un café".
+            {isFiltering
+              ? 'No se encontraron gastos que coincidan con el filtro.'
+              : 'Todavía no registraste gastos. Probá escribir algo como "gasté 15 dólares en un café".'}
           </Text>
         }
       />
+      )}
+
+      {undoExpense ? (
+        <View style={styles.undoBanner}>
+          <Text style={styles.undoText}>Gasto eliminado.</Text>
+          <Pressable onPress={handleUndo}>
+            <Text style={styles.undoButtonText}>Deshacer</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -140,7 +280,54 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: 14, color: '#666' },
   totalValue: { fontSize: 34, fontWeight: '700', marginTop: 4 },
+  monthTotal: { fontSize: 13, color: '#666', marginTop: 4 },
   headerButtons: { flexDirection: 'row', gap: 16, marginTop: 12 },
+  apiKeyBanner: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  apiKeyBannerText: { color: '#92400e', fontSize: 13 },
+  initialLoadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  filterSection: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  categoryFilterRow: { gap: 8, paddingBottom: 12 },
+  categoryChip: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  categoryChipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  categoryChipText: { fontSize: 13, color: '#333' },
+  categoryChipTextSelected: { color: '#fff', fontWeight: '600' },
+  undoBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1f2937',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 10,
+  },
+  undoText: { color: '#fff', fontSize: 14 },
+  undoButtonText: { color: '#60a5fa', fontWeight: '700', fontSize: 14 },
   linkButton: { paddingVertical: 4 },
   linkButtonText: { color: '#2563eb', fontWeight: '600' },
   listContent: { padding: 16, flexGrow: 1 },
