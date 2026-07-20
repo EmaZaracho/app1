@@ -3,24 +3,17 @@ import { AIProviderError } from './aiErrors';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-const RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    type: { type: 'string', enum: ['gasto', 'ingreso', 'transferencia'] },
-    amount: { type: 'number' },
-    category: { type: 'string', nullable: true },
-    description: { type: 'string' },
-    sourceFund: { type: 'string', nullable: true },
-    destinationFund: { type: 'string', nullable: true },
-  },
-  required: ['type', 'amount', 'description'],
-};
-
-/** Pide una completación a Gemini y devuelve el contenido crudo (JSON string). */
+/**
+ * Pide una completación a Gemini y devuelve el contenido crudo (JSON string).
+ * `responseSchema` es específico de cada flujo (interpretar movimientos,
+ * generar recomendaciones financieras, etc.) — nunca se comparte un schema
+ * fijo entre flujos distintos.
+ */
 export async function geminiComplete(
   systemPrompt: string,
   userText: string,
-  apiKey: string
+  apiKey: string,
+  responseSchema: object
 ): Promise<string> {
   if (!apiKey) {
     throw new AIProviderError('Falta configurar la API key de Gemini.');
@@ -37,7 +30,7 @@ export async function geminiComplete(
         generationConfig: {
           temperature: 0,
           responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
+          responseSchema,
         },
       }),
     });

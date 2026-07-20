@@ -2,7 +2,7 @@ import { normalizeName } from '../domain/normalize';
 import { DEFAULT_FUND_COLOR, DEFAULT_FUND_ICON } from '../fundVisuals';
 import type { SqlDatabase } from './sqlDatabase';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const DEFAULT_FUND_NAME = 'Efectivo';
 
 const CREATE_FUNDS = `
@@ -63,6 +63,42 @@ const CREATE_BUDGETS = `
   CREATE TABLE IF NOT EXISTS budgets (
     category TEXT PRIMARY KEY,
     monthly_limit REAL NOT NULL
+  );
+`;
+
+// financial_preferences guarda una única fila fija (id = 1) con la meta de ahorro activa.
+const CREATE_FINANCIAL_PREFERENCES = `
+  CREATE TABLE IF NOT EXISTS financial_preferences (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    savings_goal_enabled INTEGER NOT NULL DEFAULT 0,
+    savings_goal_mode TEXT CHECK (savings_goal_mode IN ('fixed_amount','income_percentage')),
+    savings_goal_value REAL,
+    updated_at TEXT NOT NULL
+  );
+`;
+
+const CREATE_CATEGORY_FINANCIAL_SETTINGS = `
+  CREATE TABLE IF NOT EXISTS category_financial_settings (
+    category TEXT PRIMARY KEY,
+    spending_priority TEXT NOT NULL CHECK (spending_priority IN ('essential','flexible','discretionary')),
+    updated_at TEXT NOT NULL
+  );
+`;
+
+// financial_advice_cache guarda únicamente el último análisis (fila fija id = 1), no un historial.
+const CREATE_FINANCIAL_ADVICE_CACHE = `
+  CREATE TABLE IF NOT EXISTS financial_advice_cache (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    period_preset TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    comparison_enabled INTEGER NOT NULL DEFAULT 1,
+    provider TEXT NOT NULL,
+    snapshot_hash TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    advice_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
   );
 `;
 
@@ -182,6 +218,9 @@ export async function initDatabase(db: SqlDatabase): Promise<void> {
     await db.execAsync(CREATE_FUND_ALIASES);
     await db.execAsync(CREATE_MOVEMENTS);
     await db.execAsync(CREATE_BUDGETS);
+    await db.execAsync(CREATE_FINANCIAL_PREFERENCES);
+    await db.execAsync(CREATE_CATEGORY_FINANCIAL_SETTINGS);
+    await db.execAsync(CREATE_FINANCIAL_ADVICE_CACHE);
     await db.execAsync(CREATE_INDEXES);
 
     const efectivoId = await ensureDefaultFund(db, now);

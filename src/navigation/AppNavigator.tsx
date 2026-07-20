@@ -8,6 +8,8 @@ import MovementDetailScreen from '../screens/MovementDetailScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
 import FundsScreen from '../screens/FundsScreen';
 import FundEditorScreen from '../screens/FundEditorScreen';
+import FinancialInsightsScreen from '../screens/FinancialInsightsScreen';
+import CategoryPrioritySettingsScreen from '../screens/CategoryPrioritySettingsScreen';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { useTheme } from '../theme';
 import type { RootStackParamList } from '../types';
@@ -50,6 +52,16 @@ export default function AppNavigator() {
         <Stack.Screen name="Budgets" component={BudgetsScreen} options={{ title: 'Presupuestos' }} />
         <Stack.Screen name="Funds" component={FundsScreen} options={{ title: 'Fondos' }} />
         <Stack.Screen name="FundEditor" component={FundEditorScreen} options={{ title: 'Fondo' }} />
+        <Stack.Screen
+          name="FinancialInsights"
+          component={FinancialInsightsScreen}
+          options={{ title: 'Análisis financiero' }}
+        />
+        <Stack.Screen
+          name="CategoryPrioritySettings"
+          component={CategoryPrioritySettingsScreen}
+          options={{ title: 'Prioridad de categorías' }}
+        />
         <Stack.Screen
           name="MovementDetail"
           component={MovementDetailScreen}

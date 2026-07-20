@@ -1,6 +1,20 @@
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../types';
 import type { AIFundInfo } from './aiTypes';
 
+/** Schema de respuesta para Gemini, específico del flujo de interpretación de movimientos. */
+export const MOVEMENT_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    type: { type: 'string', enum: ['gasto', 'ingreso', 'transferencia'] },
+    amount: { type: 'number' },
+    category: { type: 'string', nullable: true },
+    description: { type: 'string' },
+    sourceFund: { type: 'string', nullable: true },
+    destinationFund: { type: 'string', nullable: true },
+  },
+  required: ['type', 'amount', 'description'],
+};
+
 function fundsBlock(funds: AIFundInfo[]): string {
   if (funds.length === 0) {
     return 'No hay fondos disponibles. Devolvé siempre sourceFund y destinationFund en null.';

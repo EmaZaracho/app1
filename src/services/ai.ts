@@ -2,7 +2,7 @@ import type { AIProvider } from '../types';
 import type { AIFundInfo, AIMovementResponse } from './aiTypes';
 import { deepseekComplete } from './deepseek';
 import { geminiComplete } from './gemini';
-import { buildMovementPrompt } from './movementPrompt';
+import { buildMovementPrompt, MOVEMENT_RESPONSE_SCHEMA } from './movementPrompt';
 import { parseAIMovement } from './parseMovementResponse';
 
 export { AIProviderError } from './aiErrors';
@@ -24,7 +24,7 @@ export async function parseMovement(
   const systemPrompt = buildMovementPrompt(funds);
   const content =
     provider === 'gemini'
-      ? await geminiComplete(systemPrompt, text, apiKey)
+      ? await geminiComplete(systemPrompt, text, apiKey, MOVEMENT_RESPONSE_SCHEMA)
       : await deepseekComplete(systemPrompt, text, apiKey);
   return parseAIMovement(content, text);
 }

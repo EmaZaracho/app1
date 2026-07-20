@@ -111,12 +111,23 @@ export interface Budget {
   monthlyLimit: number;
 }
 
+/** Filtro que una pantalla externa (p. ej. Análisis financiero) le pide a Home que aplique. */
+export interface HomeMovementFilter {
+  type?: MovementType;
+  category?: Category;
+  periodStart?: string;
+  /** Exclusivo, coherente con el resto de las consultas de la app. */
+  periodEnd?: string;
+}
+
 export type RootStackParamList = {
-  Home: { deletedMovement?: Movement } | undefined;
+  Home: { deletedMovement?: Movement; filter?: HomeMovementFilter } | undefined;
   Summary: undefined;
   Settings: undefined;
   Budgets: undefined;
   Funds: undefined;
   FundEditor: { fundId?: number } | undefined;
   MovementDetail: { movementId: number };
+  FinancialInsights: undefined;
+  CategoryPrioritySettings: undefined;
 };

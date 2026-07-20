@@ -118,6 +118,8 @@ export default function HomeScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<MovementType | null>(null);
+  const [filterCategory, setFilterCategory] = useState<Category | null>(null);
+  const [filterPeriod, setFilterPeriod] = useState<{ start: string; end: string } | null>(null);
   const [undoMovement, setUndoMovement] = useState<Movement | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
@@ -206,6 +208,19 @@ export default function HomeScreen({ navigation, route }: Props) {
     showUndoBanner(deleted);
   }, [route.params?.deletedMovement, navigation, showUndoBanner]);
 
+  // Filtro pedido por una pantalla externa (p. ej. "Ver movimientos" desde
+  // Análisis financiero). No se auto-asigna nada: solo aplica lo recibido.
+  useEffect(() => {
+    const filter = route.params?.filter;
+    if (!filter) return;
+    navigation.setParams({ filter: undefined });
+    setFilterType(filter.type ?? null);
+    setFilterCategory(filter.category ?? null);
+    setFilterPeriod(
+      filter.periodStart && filter.periodEnd ? { start: filter.periodStart, end: filter.periodEnd } : null
+    );
+  }, [route.params?.filter, navigation]);
+
   useEffect(() => {
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -256,6 +271,10 @@ export default function HomeScreen({ navigation, route }: Props) {
     const query = searchQuery.trim().toLowerCase();
     return movements.filter((item) => {
       if (filterType && item.type !== filterType) return false;
+      if (filterCategory && item.category !== filterCategory) return false;
+      if (filterPeriod && (item.createdAt < filterPeriod.start || item.createdAt >= filterPeriod.end)) {
+        return false;
+      }
       if (!query) return true;
       return (
         item.description.toLowerCase().includes(query) ||
@@ -266,6 +285,12 @@ export default function HomeScreen({ navigation, route }: Props) {
   }, [movements, searchQuery, filterType]);
 
   const isFiltering = searchQuery.trim().length > 0 || filterType !== null;
+  const hasAdvancedFilter = filterCategory !== null || filterPeriod !== null;
+
+  function clearAdvancedFilters() {
+    setFilterCategory(null);
+    setFilterPeriod(null);
+  }
 
   async function handleParse() {
     const trimmed = text.trim();
@@ -501,6 +526,13 @@ export default function HomeScreen({ navigation, route }: Props) {
               </Pressable>
             ))}
           </View>
+          {hasAdvancedFilter ? (
+            <Pressable style={styles.advancedFilterChip} onPress={clearAdvancedFilters}>
+              <Text style={styles.advancedFilterText}>
+                Filtro de "{filterCategory ?? 'período'}" activo · Tocá para quitarlo ✕
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -760,6 +792,14 @@ function createStyles(theme: Theme) {
       marginBottom: 10,
     },
     typeFilterRow: { flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: 'wrap' },
+    advancedFilterChip: {
+      backgroundColor: theme.surfaceAlt,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginBottom: 10,
+    },
+    advancedFilterText: { fontSize: 12, color: theme.primary, fontWeight: '600' },
     typeChip: {
       borderWidth: 1,
       borderColor: theme.border,

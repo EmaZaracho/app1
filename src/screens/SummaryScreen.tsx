@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
+import type { RootStackParamList } from '../types';
 import {
   getCurrentMonthExpenseCategoryTotals,
   getExpenseCategoryTotals,
@@ -73,10 +75,13 @@ function DonutChart({ data, theme }: { data: CategoryTotal[]; theme: Theme }) {
   );
 }
 
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
 export default function SummaryScreen() {
   const theme = useTheme();
   const themedStyles = useMemo(() => createStyles(theme), [theme]);
   const db = useDb();
+  const navigation = useNavigation<Nav>();
   const [range, setRange] = useState<Range>('month');
   const [totals, setTotals] = useState<CategoryTotal[]>([]);
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([]);
@@ -107,6 +112,13 @@ export default function SummaryScreen() {
         contentContainerStyle={themedStyles.listContent}
         ListHeaderComponent={
           <View style={themedStyles.trendSection}>
+            <Pressable
+              style={themedStyles.insightsButton}
+              onPress={() => navigation.navigate('FinancialInsights')}
+            >
+              <Text style={themedStyles.insightsButtonText}>📈 Análisis financiero y recomendaciones</Text>
+            </Pressable>
+
             <Text style={themedStyles.sectionTitle}>Últimos 6 meses</Text>
             <View style={themedStyles.legendRow}>
               <View style={themedStyles.legendItem}>
@@ -223,6 +235,14 @@ function createStyles(theme: Theme) {
     container: { flex: 1, backgroundColor: theme.bg },
     listContent: { padding: 16 },
     sectionTitle: { fontSize: 15, fontWeight: '700', color: theme.text },
+    insightsButton: {
+      backgroundColor: theme.primary,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    insightsButtonText: { color: theme.primaryText, fontWeight: '700', fontSize: 14 },
     sectionHeaderRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',

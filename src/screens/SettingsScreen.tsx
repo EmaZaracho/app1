@@ -71,6 +71,11 @@ export default function SettingsScreen({ navigation }: Props) {
         <Text style={styles.fundsButtonChevron}>›</Text>
       </Pressable>
 
+      <Pressable style={styles.fundsButton} onPress={() => navigation.navigate('CategoryPrioritySettings')}>
+        <Text style={styles.fundsButtonText}>🏷️ Prioridad de categorías</Text>
+        <Text style={styles.fundsButtonChevron}>›</Text>
+      </Pressable>
+
       <Text style={styles.label}>Proveedor de IA</Text>
       <View style={styles.providerRow}>
         {AI_PROVIDERS.map((p) => (
