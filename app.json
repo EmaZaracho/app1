@@ -1,15 +1,18 @@
 {
   "expo": {
-    "name": "app1",
+    "name": "GestorIA",
     "slug": "app1",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.emazaracho.app1"
     },
     "android": {
+      "package": "com.emazaracho.app1",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,6 +27,17 @@
     "plugins": [
       "expo-sqlite",
       "expo-secure-store"
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b1034252-18e8-42a1-84d7-529ed042a057"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b1034252-18e8-42a1-84d7-529ed042a057"
+      }
+    }
   }
 }

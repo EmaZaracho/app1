@@ -24,9 +24,16 @@ describe('reglas de selección de fondos', () => {
     expect(gasto.canConfirm).toBe(false);
   });
 
-  it('el predeterminado NO se asigna automáticamente con varios fondos', () => {
-    const gasto = computeFundSelection({ type: 'gasto', resolvedSourceId: null, resolvedDestId: null, activeFunds: THREE_FUNDS });
-    expect(gasto.sourceFundId).toBeNull();
+  it('un gasto sin fondo usa el predeterminado cuando se provee', () => {
+    const gasto = computeFundSelection({ type: 'gasto', resolvedSourceId: null, resolvedDestId: null, activeFunds: THREE_FUNDS, defaultFundId: 1 });
+    expect(gasto.sourceFundId).toBe(1);
+    expect(gasto.canConfirm).toBe(true);
+  });
+
+  it('un ingreso sin fondo NO usa el predeterminado (se pregunta)', () => {
+    const ingreso = computeFundSelection({ type: 'ingreso', resolvedSourceId: null, resolvedDestId: null, activeFunds: THREE_FUNDS, defaultFundId: 1 });
+    expect(ingreso.destinationFundId).toBeNull();
+    expect(ingreso.needsDestination).toBe(true);
   });
 
   it('una transferencia requiere dos fondos activos distintos', () => {

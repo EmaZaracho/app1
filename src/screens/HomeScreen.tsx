@@ -71,6 +71,24 @@ function providerLabel(id: AIProvider): string {
   return AI_PROVIDERS.find((p) => p.id === id)?.label ?? id;
 }
 
+function buildNewMovement(
+  type: AIMovementType,
+  amount: number,
+  category: Category | null,
+  description: string,
+  rawText: string,
+  sourceFundId: number | null,
+  destinationFundId: number | null
+): NewMovement {
+  if (type === 'gasto') {
+    return { type: 'gasto', amount, category: category ?? 'Otros', description, rawText, sourceFundId, destinationFundId: null };
+  }
+  if (type === 'ingreso') {
+    return { type: 'ingreso', amount, category: category ?? 'Otros', description, rawText, sourceFundId: null, destinationFundId };
+  }
+  return { type: 'transferencia', amount, category: null, description, rawText, sourceFundId, destinationFundId };
+}
+
 interface Preview {
   type: AIMovementType;
   amount: string;
@@ -111,6 +129,8 @@ export default function HomeScreen({ navigation, route }: Props) {
     for (const f of allFunds) map.set(f.id, f.name);
     return map;
   }, [allFunds]);
+
+  const defaultFundId = useMemo(() => funds.find((f) => f.isDefault)?.id ?? null, [funds]);
 
   const activeSlide = slides[activeIndex];
   const context = useMemo(
@@ -271,8 +291,28 @@ export default function HomeScreen({ navigation, route }: Props) {
         resolvedSourceId: resolved.sourceFundId,
         resolvedDestId: resolved.destinationFundId,
         activeFunds: funds.map((f) => ({ id: f.id, isDefault: f.isDefault })),
+        defaultFundId,
       });
 
+      // Si la entrada es clara y no ambigua, se confirma automáticamente.
+      if (selection.canConfirm && Number.isFinite(resolved.amount) && resolved.amount > 0) {
+        const movement = buildNewMovement(
+          resolved.type,
+          resolved.amount,
+          resolved.category,
+          resolved.description || trimmed,
+          trimmed,
+          selection.sourceFundId,
+          selection.destinationFundId
+        );
+        await addMovement(db, movement);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setText('');
+        await load();
+        return;
+      }
+
+      // Entrada ambigua o incompleta: se muestra la vista previa para completar.
       setPreview({
         type: resolved.type,
         amount: String(resolved.amount),
@@ -297,8 +337,9 @@ export default function HomeScreen({ navigation, route }: Props) {
       resolvedSourceId: preview.sourceFundId,
       resolvedDestId: preview.destinationFundId,
       activeFunds: funds.map((f) => ({ id: f.id, isDefault: f.isDefault })),
+      defaultFundId,
     });
-  }, [preview, funds]);
+  }, [preview, funds, defaultFundId]);
 
   const previewAmountValue = preview ? Number(preview.amount.replace(',', '.')) : 0;
   const previewAmountValid = Number.isFinite(previewAmountValue) && previewAmountValue > 0;
@@ -333,6 +374,7 @@ export default function HomeScreen({ navigation, route }: Props) {
       resolvedSourceId: nextType === 'ingreso' ? null : preview.sourceFundId,
       resolvedDestId: nextType === 'gasto' ? null : preview.destinationFundId,
       activeFunds: funds.map((f) => ({ id: f.id, isDefault: f.isDefault })),
+      defaultFundId,
     });
     updatePreview({
       type: nextType,
@@ -356,38 +398,15 @@ export default function HomeScreen({ navigation, route }: Props) {
     }
     if (!previewSelection.canConfirm) return;
 
-    let movement: NewMovement;
-    if (preview.type === 'gasto') {
-      movement = {
-        type: 'gasto',
-        amount: previewAmountValue,
-        category: preview.category ?? 'Otros',
-        description: preview.description.trim() || preview.rawText,
-        rawText: preview.rawText,
-        sourceFundId: preview.sourceFundId,
-        destinationFundId: null,
-      };
-    } else if (preview.type === 'ingreso') {
-      movement = {
-        type: 'ingreso',
-        amount: previewAmountValue,
-        category: preview.category ?? 'Otros',
-        description: preview.description.trim() || preview.rawText,
-        rawText: preview.rawText,
-        sourceFundId: null,
-        destinationFundId: preview.destinationFundId,
-      };
-    } else {
-      movement = {
-        type: 'transferencia',
-        amount: previewAmountValue,
-        category: null,
-        description: preview.description.trim() || preview.rawText,
-        rawText: preview.rawText,
-        sourceFundId: preview.sourceFundId,
-        destinationFundId: preview.destinationFundId,
-      };
-    }
+    const movement = buildNewMovement(
+      preview.type,
+      previewAmountValue,
+      preview.category,
+      preview.description.trim() || preview.rawText,
+      preview.rawText,
+      preview.sourceFundId,
+      preview.destinationFundId
+    );
 
     try {
       await addMovement(db, movement);
@@ -416,6 +435,20 @@ export default function HomeScreen({ navigation, route }: Props) {
           onIndexChange={handleIndexChange}
           onAddFund={() => navigation.navigate('FundEditor', undefined)}
         />
+      ) : null}
+
+      {!initialLoading ? (
+        <View style={styles.quickLinksRow}>
+          <Pressable style={styles.quickLink} onPress={() => navigation.navigate('Summary')}>
+            <Text style={styles.quickLinkText}>📊 Resumen</Text>
+          </Pressable>
+          <Pressable style={styles.quickLink} onPress={() => navigation.navigate('Budgets')}>
+            <Text style={styles.quickLinkText}>🎯 Presupuestos</Text>
+          </Pressable>
+          <Pressable style={styles.quickLink} onPress={() => navigation.navigate('Settings')}>
+            <Text style={styles.quickLinkText}>⚙️ Configuración</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {!initialLoading && !hasApiKey ? (
@@ -696,6 +729,14 @@ export default function HomeScreen({ navigation, route }: Props) {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     flex: { flex: 1, backgroundColor: theme.bg },
+    quickLinksRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      paddingHorizontal: 16,
+      paddingBottom: 8,
+    },
+    quickLink: { paddingVertical: 4, paddingHorizontal: 6 },
+    quickLinkText: { color: theme.primary, fontWeight: '600', fontSize: 13 },
     apiKeyBanner: { backgroundColor: theme.warningBg, paddingHorizontal: 16, paddingVertical: 10 },
     apiKeyBannerText: { color: theme.warningText, fontSize: 13 },
     budgetAlertBanner: { backgroundColor: theme.dangerBg, paddingHorizontal: 16, paddingVertical: 10 },

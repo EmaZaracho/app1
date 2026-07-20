@@ -8,6 +8,7 @@ import MovementDetailScreen from '../screens/MovementDetailScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
 import FundsScreen from '../screens/FundsScreen';
 import FundEditorScreen from '../screens/FundEditorScreen';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { useTheme } from '../theme';
 import type { RootStackParamList } from '../types';
 
@@ -39,7 +40,11 @@ export default function AppNavigator() {
           contentStyle: { backgroundColor: theme.bg },
         }}
       >
-        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Mis finanzas' }} />
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{ title: 'Mis finanzas', headerRight: () => <ThemeToggleButton /> }}
+        />
         <Stack.Screen name="Summary" component={SummaryScreen} options={{ title: 'Resumen' }} />
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Configuración' }} />
         <Stack.Screen name="Budgets" component={BudgetsScreen} options={{ title: 'Presupuestos' }} />

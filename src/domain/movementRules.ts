@@ -55,6 +55,8 @@ export interface FundSelectionInput {
   /** Fondo de destino ya resuelto, o null si falta. */
   resolvedDestId: number | null;
   activeFunds: FundOption[];
+  /** Fondo predeterminado: se usa como origen de gastos sin fondo especificado. */
+  defaultFundId?: number | null;
 }
 
 export interface FundSelectionResult {
@@ -74,7 +76,8 @@ export interface FundSelectionResult {
  *
  * Reglas:
  * - Con exactamente un fondo activo, gastos e ingresos lo asignan solos.
- * - Con varios fondos, nunca se asigna el predeterminado automáticamente.
+ * - Un gasto sin fondo especificado usa el fondo predeterminado (si existe).
+ * - Un ingreso sin fondo especificado (con varios fondos) se pregunta.
  * - Las transferencias requieren dos fondos activos distintos; nunca se
  *   auto-asignan.
  */
@@ -83,7 +86,7 @@ export function computeFundSelection(input: FundSelectionInput): FundSelectionRe
   const onlyFundId = activeFunds.length === 1 ? activeFunds[0].id : null;
 
   if (type === 'gasto') {
-    const sourceFundId = input.resolvedSourceId ?? onlyFundId;
+    const sourceFundId = input.resolvedSourceId ?? onlyFundId ?? input.defaultFundId ?? null;
     const needsSource = sourceFundId == null;
     return {
       sourceFundId,
