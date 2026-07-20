@@ -10,6 +10,7 @@ import FundsScreen from '../screens/FundsScreen';
 import FundEditorScreen from '../screens/FundEditorScreen';
 import FinancialInsightsScreen from '../screens/FinancialInsightsScreen';
 import CategoryPrioritySettingsScreen from '../screens/CategoryPrioritySettingsScreen';
+import ReceiptReviewScreen from '../screens/ReceiptReviewScreen';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { useTheme } from '../theme';
 import type { RootStackParamList } from '../types';
@@ -61,6 +62,11 @@ export default function AppNavigator() {
           name="CategoryPrioritySettings"
           component={CategoryPrioritySettingsScreen}
           options={{ title: 'Prioridad de categorías' }}
+        />
+        <Stack.Screen
+          name="ReceiptReview"
+          component={ReceiptReviewScreen}
+          options={{ title: 'Revisar factura' }}
         />
         <Stack.Screen
           name="MovementDetail"

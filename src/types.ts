@@ -1,3 +1,5 @@
+import type { ParsedReceipt } from './services/receiptTypes';
+
 export const EXPENSE_CATEGORIES = [
   'Comida',
   'Transporte',
@@ -130,4 +132,5 @@ export type RootStackParamList = {
   MovementDetail: { movementId: number };
   FinancialInsights: undefined;
   CategoryPrioritySettings: undefined;
+  ReceiptReview: { receipt: ParsedReceipt };
 };

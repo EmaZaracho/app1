@@ -26,7 +26,14 @@
     },
     "plugins": [
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Se usa para elegir la foto de un comprobante y registrar el gasto.",
+          "cameraPermission": "Se usa para sacar una foto de un comprobante y registrar el gasto."
+        }
+      ]
     ],
     "runtimeVersion": {
       "policy": "appVersion"

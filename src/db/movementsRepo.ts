@@ -68,6 +68,20 @@ export function addMovement(db: SqlDatabase, movement: NewMovement): Promise<Mov
   return insertMovement(db, movement);
 }
 
+/**
+ * Inserta varios movimientos en una sola transacción (todo o nada). Se usa
+ * para el escaneo de facturas: si un ítem falla, ninguno queda insertado.
+ */
+export async function addMovements(db: SqlDatabase, movements: NewMovement[]): Promise<Movement[]> {
+  const created: Movement[] = [];
+  await db.withTransactionAsync(async () => {
+    for (const movement of movements) {
+      created.push(await insertMovement(db, movement));
+    }
+  });
+  return created;
+}
+
 export async function getMovements(db: SqlDatabase): Promise<Movement[]> {
   const rows = await db.getAllAsync<MovementRow>('SELECT * FROM movements ORDER BY id DESC');
   return rows.map(rowToMovement);

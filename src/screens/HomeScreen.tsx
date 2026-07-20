@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -16,6 +17,8 @@ import {
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
@@ -35,6 +38,7 @@ import type { SlideStats } from '../db/balances';
 import { useDb } from '../db/useDb';
 import { getApiKey, getSelectedProvider } from '../services/apiKey';
 import { parseMovement, resolveAIMovement, AIProviderError } from '../services/ai';
+import { scanReceipt } from '../services/receiptScan';
 import { getFundMatchTargets } from '../db/fundsRepo';
 import { computeFundSelection } from '../domain/movementRules';
 import { describeMovement } from '../domain/movementDisplay';
@@ -125,6 +129,7 @@ export default function HomeScreen({ navigation, route }: Props) {
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
   const swipeableRefs = useRef<Map<number, Swipeable>>(new Map());
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [scanningReceipt, setScanningReceipt] = useState(false);
 
   const fundNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -352,6 +357,85 @@ export default function HomeScreen({ navigation, route }: Props) {
       setError(err instanceof AIProviderError ? err.message : 'Ocurrió un error inesperado.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Escanear factura: SIEMPRE usa Gemini (visión), sin importar el proveedor
+  // de IA activo del usuario. DeepSeek no puede leer imágenes; no hay fallback.
+  async function handleScanReceiptPress() {
+    const geminiKey = await getApiKey('gemini');
+    if (!geminiKey) {
+      Alert.alert(
+        'Necesitás Gemini',
+        'Escanear facturas requiere una API key de Gemini configurada (DeepSeek no puede leer imágenes).',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Ir a Configuración', onPress: () => navigation.navigate('Settings') },
+        ]
+      );
+      return;
+    }
+
+    Alert.alert('Escanear factura', 'Elegí el origen de la foto', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Tomar foto', onPress: () => captureAndScanReceipt('camera', geminiKey) },
+      { text: 'Elegir de la galería', onPress: () => captureAndScanReceipt('library', geminiKey) },
+    ]);
+  }
+
+  async function captureAndScanReceipt(source: 'camera' | 'library', geminiKey: string) {
+    try {
+      const permission =
+        source === 'camera'
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError(
+          `Necesitás dar permiso de ${source === 'camera' ? 'cámara' : 'galería'} para escanear una factura.`
+        );
+        return;
+      }
+
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync({ quality: 0.9 })
+          : await ImagePicker.launchImageLibraryAsync({ quality: 0.9, mediaTypes: ['images'] });
+
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+
+      setError(null);
+      setScanningReceipt(true);
+
+      // Redimensionar al lado mayor <= 1600px (preservando aspecto) antes de
+      // comprimir a JPEG ~0.7: no gastar de más en tokens/tiempo de subida.
+      const maxSide = Math.max(asset.width, asset.height);
+      const scale = maxSide > 1600 ? 1600 / maxSide : 1;
+      let context = ImageManipulator.manipulate(asset.uri);
+      if (scale < 1) {
+        context = context.resize({ width: Math.round(asset.width * scale) });
+      }
+      const rendered = await context.renderAsync();
+      const saved = await rendered.saveAsync({ compress: 0.7, format: SaveFormat.JPEG, base64: true });
+
+      if (!saved.base64) {
+        setError('No se pudo procesar la imagen.');
+        return;
+      }
+
+      const parsed = await scanReceipt(saved.base64, geminiKey);
+      if (parsed.items.length === 0) {
+        Alert.alert(
+          'No se detectaron productos',
+          'No pudimos identificar productos en la foto. Probá con otra imagen más clara.'
+        );
+        return;
+      }
+      navigation.navigate('ReceiptReview', { receipt: parsed });
+    } catch (err) {
+      setError(err instanceof AIProviderError ? err.message : 'No se pudo procesar la factura.');
+    } finally {
+      setScanningReceipt(false);
     }
   }
 
@@ -742,6 +826,17 @@ export default function HomeScreen({ navigation, route }: Props) {
             returnKeyType="send"
           />
           <Pressable
+            style={[styles.photoButton, scanningReceipt && styles.buttonDisabled]}
+            onPress={handleScanReceiptPress}
+            disabled={scanningReceipt || loading}
+          >
+            {scanningReceipt ? (
+              <ActivityIndicator color={theme.text} />
+            ) : (
+              <Text style={styles.photoButtonText}>📷</Text>
+            )}
+          </Pressable>
+          <Pressable
             style={[styles.addButton, loading && styles.buttonDisabled]}
             onPress={handleParse}
             disabled={loading}
@@ -868,6 +963,14 @@ function createStyles(theme: Theme) {
       paddingVertical: 10,
       fontSize: 16,
     },
+    photoButton: {
+      backgroundColor: theme.surfaceAlt,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    photoButtonText: { fontSize: 20 },
     addButton: {
       backgroundColor: theme.primary,
       borderRadius: 10,
