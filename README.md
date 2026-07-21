@@ -10,6 +10,10 @@ Gestor de gastos personal para Android/iOS con entrada en **lenguaje natural**: 
 - **Carrusel** en la pantalla principal: "Total" + cada fondo activo, con su propia lista de movimientos.
 - **Presupuestos** por categoría con alertas cuando se supera el límite mensual.
 - **Resumen**: gráfico de torta por categoría, tendencia de los últimos 6 meses, selector "Este mes" / "Todo".
+- **Escaneo de comprobantes con IA**: sacás o elegís una foto de un ticket/factura (Gemini Vision) y la app propone los ítems ya cargados para revisar y confirmar antes de guardar.
+- **Análisis financiero con IA**: recomendaciones y hallazgos deterministas a partir de un snapshot local de tus movimientos, con meta de ahorro configurable y prioridad de gasto por categoría (esencial/flexible/discrecional). El análisis se cachea y solo se recalcula cuando cambian los datos.
+- **Gastos recurrentes + calendario financiero**: definís una regla (nombre, monto fijo/estimado/desconocido, día del mes, fondo) y la app genera automáticamente la "ocurrencia" de cada mes. Calendario mensual con proyección de gasto, saldo por fondo y presupuesto. Cada ocurrencia se puede pagar, omitir, reprogramar, cancelar o eliminar por separado sin afectar la regla; al editar o eliminar podés elegir el alcance ("solo esta" / "esta y las siguientes" / "toda la serie"). Recordatorios locales opcionales (`expo-notifications`) unos días antes de cada vencimiento.
+- **Aviso de actualización**: al abrir la app después de instalarse un update OTA nuevo, muestra un popup avisando que se actualizó.
 - **Tema claro/oscuro** con botón manual en el header (además de seguir el tema del sistema por defecto).
 - **Deshacer** al eliminar un movimiento, swipe-to-delete, feedback háptico.
 - Todos los montos en **pesos argentinos (ARS)**, sin soporte multimoneda.
@@ -21,7 +25,9 @@ Gestor de gastos personal para Android/iOS con entrada en **lenguaje natural**: 
 - `expo-secure-store` para las API keys
 - `@react-navigation` (native-stack)
 - `react-native-svg` (gráfico de torta), `react-native-gesture-handler` (swipe-to-delete), `expo-haptics`
-- `expo-updates` + EAS Update para actualizaciones over-the-air
+- `expo-image-picker` (foto de comprobante), Gemini Vision para escanear tickets
+- `expo-notifications` para recordatorios locales de gastos recurrentes
+- `expo-updates` + EAS Update para actualizaciones over-the-air, con aviso in-app cuando se aplica una nueva
 - Jest + `ts-jest` + `better-sqlite3` para tests de la capa de datos, sin mocks: corren las mismas queries SQL que la app
 
 ## Cómo correr el proyecto
@@ -52,20 +58,38 @@ src/
   domain/          Reglas de negocio puras (sin DB ni React): normalización de
                     nombres de fondos, matching de alias, invariantes de
                     movimientos, selección automática de fondo.
-  db/               Acceso a datos. schema.ts tiene el esquema + migración
-                    idempotente desde la tabla legacy `expenses`. balances.ts
-                    es la ÚNICA fuente de cálculo de saldos. Un repo por
-                    entidad (fundsRepo, movementsRepo, summaryRepo,
-                    budgetsRepo). sqlDatabase.ts abstrae expo-sqlite para
-                    poder testear con better-sqlite3 en Node.
-  services/         Integración con IA: prompt dinámico (movementPrompt.ts),
-                    parseo/validación de la respuesta, resolución local de
+  db/               Acceso a datos. schema.ts tiene el esquema + migraciones
+                    versionadas idempotentes (PRAGMA user_version), incluida
+                    la legacy `expenses` -> `movements`. balances.ts es la
+                    ÚNICA fuente de cálculo de saldos. Un repo por entidad
+                    (fundsRepo, movementsRepo, summaryRepo, budgetsRepo,
+                    recurringExpenseRulesRepository,
+                    recurringExpenseOccurrencesRepository,
+                    financialAdviceCacheRepository, etc.). sqlDatabase.ts
+                    abstrae expo-sqlite para poder testear con
+                    better-sqlite3 en Node.
+  recurring/        Lógica de negocio de gastos recurrentes: generación de
+                    ocurrencias por mes (idempotente), proyecciones,
+                    edición/eliminación con alcance (solo esta / esta y las
+                    siguientes / toda la serie), plan de recordatorios.
+  analytics/        Snapshot financiero local (sin IA) para alimentar el
+                    análisis y detectar hallazgos deterministas.
+  services/         Integración con IA: prompts dinámicos (movimientos,
+                    comprobantes, gastos recurrentes, análisis financiero),
+                    parseo/validación de cada respuesta, resolución local de
                     nombres de fondo contra fondos reales (nunca se confía en
-                    un id que devuelva la IA).
+                    un id que devuelva la IA), y updateNotice.ts (detecta un
+                    update OTA recién aplicado comparando `Updates.updateId`
+                    contra el último guardado).
   screens/          Pantallas (Home, Summary, Budgets, Settings, Funds,
-                    FundEditor, MovementDetail).
+                    FundEditor, MovementDetail, ReceiptReview,
+                    FinancialInsights, CategoryPrioritySettings,
+                    FinancialCalendar, RecurringExpenseEditor/Detail,
+                    RecurringOccurrenceDetail, RegisterOccurrencePayment).
   components/       Piezas reutilizables (FundCarousel, FundSelector,
-                    Skeleton, ThemeToggleButton).
+                    Skeleton, ThemeToggleButton, CalendarMonthGrid/DayCell,
+                    RecurringExpenseCard/Form, OccurrenceStatusBadge,
+                    UpdateNotice, tarjetas de análisis financiero).
   theme.tsx         Theming claro/oscuro (tokens + contexto + persistencia).
 ```
 
