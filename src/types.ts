@@ -1,4 +1,5 @@
 import type { ParsedReceipt } from './services/receiptTypes';
+import type { RecurringRuleInput } from './types/recurringExpenses';
 
 export const EXPENSE_CATEGORIES = [
   'Comida',
@@ -123,7 +124,9 @@ export interface HomeMovementFilter {
 }
 
 export type RootStackParamList = {
-  Home: { deletedMovement?: Movement; filter?: HomeMovementFilter } | undefined;
+  Home:
+    | { deletedMovement?: Movement; deletedOccurrenceId?: number; filter?: HomeMovementFilter }
+    | undefined;
   Summary: undefined;
   Settings: undefined;
   Budgets: undefined;
@@ -133,4 +136,9 @@ export type RootStackParamList = {
   FinancialInsights: undefined;
   CategoryPrioritySettings: undefined;
   ReceiptReview: { receipt: ParsedReceipt };
+  FinancialCalendar: undefined;
+  RecurringExpenseEditor: { ruleId?: number; draft?: RecurringRuleInput } | undefined;
+  RecurringExpenseDetail: { ruleId: number };
+  RecurringOccurrenceDetail: { occurrenceId: number };
+  RegisterOccurrencePayment: { occurrenceId: number };
 };

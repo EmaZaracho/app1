@@ -2,7 +2,7 @@ import { normalizeName } from '../domain/normalize';
 import { DEFAULT_FUND_COLOR, DEFAULT_FUND_ICON } from '../fundVisuals';
 import type { SqlDatabase } from './sqlDatabase';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 export const DEFAULT_FUND_NAME = 'Efectivo';
 
 const CREATE_FUNDS = `
@@ -102,12 +102,74 @@ const CREATE_FINANCIAL_ADVICE_CACHE = `
   );
 `;
 
+// Reglas de gastos recurrentes mensuales (el patrón general).
+const CREATE_RECURRING_RULES = `
+  CREATE TABLE IF NOT EXISTS recurring_expense_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    category TEXT NOT NULL,
+    amount_mode TEXT NOT NULL CHECK (amount_mode IN ('fixed','estimated','unknown')),
+    amount REAL,
+    fund_assignment_mode TEXT NOT NULL CHECK (fund_assignment_mode IN ('fixed','ask_on_payment')),
+    fund_id INTEGER,
+    day_of_month INTEGER NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
+    start_date TEXT NOT NULL,
+    end_date TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (fund_id) REFERENCES funds(id) ON DELETE RESTRICT,
+    CHECK (
+      (amount_mode IN ('fixed','estimated') AND amount IS NOT NULL AND amount > 0)
+      OR (amount_mode = 'unknown' AND amount IS NULL)
+    ),
+    CHECK (
+      (fund_assignment_mode = 'fixed' AND fund_id IS NOT NULL)
+      OR (fund_assignment_mode = 'ask_on_payment' AND fund_id IS NULL)
+    ),
+    CHECK (end_date IS NULL OR end_date >= start_date)
+  );
+`;
+
+// Ocurrencias mensuales concretas (el gasto proyectado de un mes puntual).
+// status='deleted' es un tombstone interno (nunca expuesto en StoredOccurrenceStatus):
+// mantiene la fila para que ensureOccurrencesForMonth no la regenere, pero las queries
+// de lectura la excluyen.
+const CREATE_RECURRING_OCCURRENCES = `
+  CREATE TABLE IF NOT EXISTS recurring_expense_occurrences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_id INTEGER NOT NULL,
+    occurrence_month TEXT NOT NULL,
+    original_scheduled_date TEXT NOT NULL,
+    scheduled_date TEXT NOT NULL,
+    projected_amount REAL,
+    category TEXT NOT NULL,
+    fund_assignment_mode TEXT NOT NULL CHECK (fund_assignment_mode IN ('fixed','ask_on_payment')),
+    fund_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','skipped','cancelled','deleted')),
+    linked_movement_id INTEGER,
+    is_manually_modified INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (rule_id, occurrence_month),
+    FOREIGN KEY (rule_id) REFERENCES recurring_expense_rules(id) ON DELETE RESTRICT,
+    FOREIGN KEY (fund_id) REFERENCES funds(id) ON DELETE RESTRICT,
+    FOREIGN KEY (linked_movement_id) REFERENCES movements(id) ON DELETE SET NULL
+  );
+`;
+
 const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_movements_source ON movements(source_fund_id);
   CREATE INDEX IF NOT EXISTS idx_movements_destination ON movements(destination_fund_id);
   CREATE INDEX IF NOT EXISTS idx_movements_created_at ON movements(created_at);
   CREATE INDEX IF NOT EXISTS idx_fund_aliases_normalized ON fund_aliases(normalized_alias);
   CREATE INDEX IF NOT EXISTS idx_fund_aliases_fund ON fund_aliases(fund_id);
+  CREATE INDEX IF NOT EXISTS idx_recurring_occurrences_month ON recurring_expense_occurrences(occurrence_month);
+  CREATE INDEX IF NOT EXISTS idx_recurring_occurrences_rule ON recurring_expense_occurrences(rule_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_recurring_occurrences_movement
+    ON recurring_expense_occurrences(linked_movement_id) WHERE linked_movement_id IS NOT NULL;
 `;
 
 async function tableExists(db: SqlDatabase, name: string): Promise<boolean> {
@@ -200,6 +262,39 @@ async function migrateLegacyExpenses(db: SqlDatabase, efectivoId: number): Promi
 }
 
 /**
+ * Reconstruye recurring_expense_occurrences para permitir status='deleted'
+ * (SQLite no soporta ALTER de un CHECK existente). Preserva todas las filas.
+ */
+async function migrateOccurrencesAllowDeletedStatus(db: SqlDatabase): Promise<void> {
+  await db.execAsync(`
+    CREATE TABLE recurring_expense_occurrences_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rule_id INTEGER NOT NULL,
+      occurrence_month TEXT NOT NULL,
+      original_scheduled_date TEXT NOT NULL,
+      scheduled_date TEXT NOT NULL,
+      projected_amount REAL,
+      category TEXT NOT NULL,
+      fund_assignment_mode TEXT NOT NULL CHECK (fund_assignment_mode IN ('fixed','ask_on_payment')),
+      fund_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','skipped','cancelled','deleted')),
+      linked_movement_id INTEGER,
+      is_manually_modified INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (rule_id, occurrence_month),
+      FOREIGN KEY (rule_id) REFERENCES recurring_expense_rules(id) ON DELETE RESTRICT,
+      FOREIGN KEY (fund_id) REFERENCES funds(id) ON DELETE RESTRICT,
+      FOREIGN KEY (linked_movement_id) REFERENCES movements(id) ON DELETE SET NULL
+    );
+    INSERT INTO recurring_expense_occurrences_new SELECT * FROM recurring_expense_occurrences;
+    DROP TABLE recurring_expense_occurrences;
+    ALTER TABLE recurring_expense_occurrences_new RENAME TO recurring_expense_occurrences;
+  `);
+}
+
+/**
  * Inicializa la base de datos: activa WAL y foreign_keys, crea el esquema,
  * corre las migraciones versionadas de forma idempotente y atómica, y asegura
  * el fondo predeterminado. Reejecutar no duplica fondos ni movimientos.
@@ -221,6 +316,12 @@ export async function initDatabase(db: SqlDatabase): Promise<void> {
     await db.execAsync(CREATE_FINANCIAL_PREFERENCES);
     await db.execAsync(CREATE_CATEGORY_FINANCIAL_SETTINGS);
     await db.execAsync(CREATE_FINANCIAL_ADVICE_CACHE);
+    await db.execAsync(CREATE_RECURRING_RULES);
+
+    if (userVersion < 4 && (await tableExists(db, 'recurring_expense_occurrences'))) {
+      await migrateOccurrencesAllowDeletedStatus(db);
+    }
+    await db.execAsync(CREATE_RECURRING_OCCURRENCES);
     await db.execAsync(CREATE_INDEXES);
 
     const efectivoId = await ensureDefaultFund(db, now);

@@ -33,7 +33,8 @@
           "photosPermission": "Se usa para elegir la foto de un comprobante y registrar el gasto.",
           "cameraPermission": "Se usa para sacar una foto de un comprobante y registrar el gasto."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "runtimeVersion": {
       "policy": "appVersion"

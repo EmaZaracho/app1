@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { deleteMovement, getMovementById, updateMovement } from '../db/movementsRepo';
 import { getFundById, getFundsWithBalances } from '../db/fundsRepo';
+import { unlinkOccurrenceForMovement } from '../recurring/recurringPayment';
 import { useDb } from '../db/useDb';
 import { FundSelector, type SelectableFund } from '../components/FundSelector';
 import { iconForCategory } from '../categoryVisuals';
@@ -204,9 +205,13 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
         style: 'destructive',
         onPress: async () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          const occId = await unlinkOccurrenceForMovement(db, movementId);
           await deleteMovement(db, movementId);
           leavingRef.current = true;
-          navigation.navigate('Home', { deletedMovement: movement ?? undefined });
+          navigation.navigate('Home', {
+            deletedMovement: movement ?? undefined,
+            deletedOccurrenceId: occId ?? undefined,
+          });
         },
       },
     ]);

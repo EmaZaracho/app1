@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { initDatabase } from './src/db/database';
 import { ThemeProvider, useThemeControls } from './src/theme';
+import { UpdateNotice } from './src/components/UpdateNotice';
 
 function ThemedStatusBar() {
   const { resolved } = useThemeControls();
@@ -19,6 +20,7 @@ export default function App() {
           <SQLiteProvider databaseName="expenses.db" onInit={initDatabase}>
             <AppNavigator />
             <ThemedStatusBar />
+            <UpdateNotice />
           </SQLiteProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>

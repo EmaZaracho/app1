@@ -40,6 +40,7 @@ import { getApiKey, getSelectedProvider } from '../services/apiKey';
 import { parseMovement, resolveAIMovement, AIProviderError } from '../services/ai';
 import { scanReceipt } from '../services/receiptScan';
 import { getFundMatchTargets } from '../db/fundsRepo';
+import { relinkOccurrence, unlinkOccurrenceForMovement } from '../recurring/recurringPayment';
 import { computeFundSelection } from '../domain/movementRules';
 import { describeMovement } from '../domain/movementDisplay';
 import { formatCurrency, formatSignedCurrency } from '../utils/format';
@@ -125,6 +126,7 @@ export default function HomeScreen({ navigation, route }: Props) {
   const [filterCategory, setFilterCategory] = useState<Category | null>(null);
   const [filterPeriod, setFilterPeriod] = useState<{ start: string; end: string } | null>(null);
   const [undoMovement, setUndoMovement] = useState<Movement | null>(null);
+  const undoOccurrenceIdRef = useRef<number | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
   const swipeableRefs = useRef<Map<number, Swipeable>>(new Map());
@@ -209,9 +211,10 @@ export default function HomeScreen({ navigation, route }: Props) {
   useEffect(() => {
     const deleted = route.params?.deletedMovement;
     if (!deleted) return;
-    navigation.setParams({ deletedMovement: undefined });
+    undoOccurrenceIdRef.current = route.params?.deletedOccurrenceId ?? null;
+    navigation.setParams({ deletedMovement: undefined, deletedOccurrenceId: undefined });
     showUndoBanner(deleted);
-  }, [route.params?.deletedMovement, navigation, showUndoBanner]);
+  }, [route.params?.deletedMovement, route.params?.deletedOccurrenceId, navigation, showUndoBanner]);
 
   // Filtro pedido por una pantalla externa (p. ej. "Ver movimientos" desde
   // Análisis financiero). No se auto-asigna nada: solo aplica lo recibido.
@@ -253,15 +256,21 @@ export default function HomeScreen({ navigation, route }: Props) {
     if (!undoMovement) return;
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     const toRestore = undoMovement;
+    const occId = undoOccurrenceIdRef.current;
+    undoOccurrenceIdRef.current = null;
     setUndoMovement(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await restoreMovement(db, toRestore);
+    // Si el movimiento estaba vinculado a una ocurrencia recurrente, re-vincular.
+    if (occId != null) await relinkOccurrence(db, occId, toRestore.id);
     await load();
   }
 
   async function handleSwipeDelete(movement: Movement) {
     swipeableRefs.current.get(movement.id)?.close();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Desvincular (y volver la ocurrencia a pending) antes de borrar el movimiento.
+    undoOccurrenceIdRef.current = await unlinkOccurrenceForMovement(db, movement.id);
     await deleteMovement(db, movement.id);
     showUndoBanner(movement);
     await load();
@@ -551,11 +560,14 @@ export default function HomeScreen({ navigation, route }: Props) {
           <Pressable style={styles.quickLink} onPress={() => navigation.navigate('Summary')}>
             <Text style={styles.quickLinkText}>📊 Resumen</Text>
           </Pressable>
+          <Pressable style={styles.quickLink} onPress={() => navigation.navigate('FinancialCalendar')}>
+            <Text style={styles.quickLinkText}>📅 Calendario</Text>
+          </Pressable>
           <Pressable style={styles.quickLink} onPress={() => navigation.navigate('Budgets')}>
             <Text style={styles.quickLinkText}>🎯 Presupuestos</Text>
           </Pressable>
           <Pressable style={styles.quickLink} onPress={() => navigation.navigate('Settings')}>
-            <Text style={styles.quickLinkText}>⚙️ Configuración</Text>
+            <Text style={styles.quickLinkText}>⚙️</Text>
           </Pressable>
         </View>
       ) : null}
