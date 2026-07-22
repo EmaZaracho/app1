@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useMovementForm } from '../hooks/useMovementForm';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { MovementFormFields } from './MovementFormFields';
 import { formatCurrency } from '../utils/format';
 import { useTheme, type Theme } from '../theme';
@@ -40,6 +41,7 @@ export function MovementPreview({
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [error, setError] = useState<string | null>(null);
+  const kb = useKeyboardAwareScroll();
 
   const selectableFunds = useMemo(
     () => funds.map((f) => ({ id: f.id, name: f.name, icon: f.icon, color: f.color })),
@@ -80,8 +82,15 @@ export function MovementPreview({
   }
 
   return (
-    <ScrollView style={styles.previewCard} keyboardShouldPersistTaps="handled">
-      <MovementFormFields form={form} funds={selectableFunds} />
+    <ScrollView
+      ref={kb.scrollRef}
+      style={styles.previewCard}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      onScroll={kb.onScroll}
+      scrollEventThrottle={kb.scrollEventThrottle}
+    >
+      <MovementFormFields form={form} funds={selectableFunds} onInputFocus={kb.registerFocusedInput} />
 
       {negativeWarning ? <Text style={styles.warningText}>⚠️ {negativeWarning}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}

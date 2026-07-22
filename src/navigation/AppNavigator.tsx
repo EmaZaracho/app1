@@ -56,6 +56,7 @@ function MainTabs() {
         tabBarStyle: { backgroundColor: theme.surface, borderTopColor: theme.border },
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.textMuted,
+        tabBarHideOnKeyboard: true,
         headerRight: () => <ThemeToggleButton />,
       }}
     >

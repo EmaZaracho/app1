@@ -16,6 +16,7 @@ import { useDb } from '../db/useDb';
 import { addMovement, getFundsWithBalances } from '../db/database';
 import { assertFundsStillActive } from '../domain/movementRules';
 import { useMovementForm } from '../hooks/useMovementForm';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { MovementFormFields } from '../components/MovementFormFields';
 import type { SelectableFund } from '../components/FundSelector';
 import { useTheme, type Theme } from '../theme';
@@ -65,6 +66,7 @@ export default function MovementFormScreen({ route, navigation }: Props) {
     initialType,
     activeFunds: activeFundOptions,
   });
+  const kb = useKeyboardAwareScroll();
 
   useEffect(() => {
     navigation.setOptions({ title: TITLE[form.type] });
@@ -112,8 +114,16 @@ export default function MovementFormScreen({ route, navigation }: Props) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <MovementFormFields form={form} funds={funds} />
+      <ScrollView
+        ref={kb.scrollRef}
+        style={styles.flex}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        onScroll={kb.onScroll}
+        scrollEventThrottle={kb.scrollEventThrottle}
+      >
+        <MovementFormFields form={form} funds={funds} onInputFocus={kb.registerFocusedInput} />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 

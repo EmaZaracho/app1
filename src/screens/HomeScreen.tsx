@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -77,31 +76,6 @@ export default function HomeScreen({ navigation, route }: Props) {
   const undo = useMovementUndo(db, homeData.reload);
   const receiptScanner = useReceiptScanner((receipt) => navigation.navigate('ReceiptReview', { receipt }));
 
-  // En Android, `behavior="height"`/"padding" de KeyboardAvoidingView calculan
-  // mal dentro de un bottom-tab. Se compensa a mano midiendo la posición REAL
-  // en pantalla del contenedor (measureInWindow) contra el borde superior real
-  // del teclado (screenY): así no depende de adivinar la altura de la tab bar
-  // ni del modo de resize de la ventana, sea cual sea.
-  const containerRef = useRef<View>(null);
-  const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
-      const keyboardTop = e.endCoordinates?.screenY;
-      if (containerRef.current == null || keyboardTop == null) return;
-      containerRef.current.measureInWindow((_x, y, _width, height) => {
-        const viewBottom = y + height;
-        setAndroidKeyboardHeight(Math.max(0, viewBottom - keyboardTop));
-      });
-    });
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => setAndroidKeyboardHeight(0));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
-
   // Movimiento borrado (con undo) recibido al volver de MovementDetail.
   useEffect(() => {
     const deleted = route.params?.deletedMovement;
@@ -149,10 +123,6 @@ export default function HomeScreen({ navigation, route }: Props) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View
-        ref={containerRef}
-        style={[styles.flex, Platform.OS === 'android' && { paddingBottom: androidKeyboardHeight }]}
-      >
       {!homeData.initialLoading && homeData.slides.length > 0 ? (
         <FundCarousel
           slides={homeData.slides}
@@ -258,7 +228,6 @@ export default function HomeScreen({ navigation, route }: Props) {
           </Pressable>
         </View>
       )}
-      </View>
     </KeyboardAvoidingView>
   );
 }

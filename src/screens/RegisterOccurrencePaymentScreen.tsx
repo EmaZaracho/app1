@@ -18,6 +18,7 @@ import { getFundsWithBalances } from '../db/fundsRepo';
 import { registerOccurrencePayment } from '../recurring/recurringPayment';
 import { assertFundsStillActive } from '../domain/movementRules';
 import { useMovementForm } from '../hooks/useMovementForm';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { MovementFormFields } from '../components/MovementFormFields';
 import type { SelectableFund } from '../components/FundSelector';
 import { useTheme, type Theme } from '../theme';
@@ -73,6 +74,7 @@ export default function RegisterOccurrencePaymentScreen({ route, navigation }: P
     initialSourceFundId: initialFundId,
     activeFunds: activeFundOptions,
   });
+  const kb = useKeyboardAwareScroll();
 
   const handleConfirm = useCallback(async () => {
     if (saving || !form.canSubmit) return;
@@ -119,10 +121,18 @@ export default function RegisterOccurrencePaymentScreen({ route, navigation }: P
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={kb.scrollRef}
+        style={styles.flex}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        onScroll={kb.onScroll}
+        scrollEventThrottle={kb.scrollEventThrottle}
+      >
         <Text style={styles.title}>Registrar pago de {ruleName}</Text>
 
-        <MovementFormFields form={form} funds={funds} />
+        <MovementFormFields form={form} funds={funds} onInputFocus={kb.registerFocusedInput} />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 

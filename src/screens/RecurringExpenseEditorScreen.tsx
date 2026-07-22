@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,7 @@ import { getFundsWithBalances, getFundMatchTargets } from '../db/fundsRepo';
 import { getApiKey } from '../services/apiKey';
 import { interpretRecurringExpense, AIProviderError } from '../services/recurringExpenseAI';
 import { RecurringExpenseForm } from '../components/RecurringExpenseForm';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { todayLocalDateString, toMonthKey } from '../recurring/recurringDateUtils';
 import type { SelectableFund } from '../components/FundSelector';
 import { useTheme, type Theme } from '../theme';
@@ -51,7 +52,7 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
   const db = useDb();
   const ruleId = route.params?.ruleId;
   const isEdit = ruleId != null;
-  const scrollRef = useRef<ScrollView>(null);
+  const kb = useKeyboardAwareScroll();
 
   const [funds, setFunds] = useState<SelectableFund[]>([]);
   const [initial, setInitial] = useState<RecurringRuleInput | null>(route.params?.draft ?? null);
@@ -157,10 +158,13 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
-        ref={scrollRef}
+        ref={kb.scrollRef}
         style={styles.flex}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        onScroll={kb.onScroll}
+        scrollEventThrottle={kb.scrollEventThrottle}
       >
         {!isEdit ? (
           <View style={styles.aiBox}>
@@ -202,7 +206,7 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
           submitLabel={isEdit ? 'Guardar cambios' : 'Crear recurrencia'}
           onSubmit={handleSubmit}
           saving={saving}
-          onFocusBottomField={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          onInputFocus={kb.registerFocusedInput}
         />
       </ScrollView>
     </KeyboardAvoidingView>
