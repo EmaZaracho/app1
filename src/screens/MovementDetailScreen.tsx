@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { deleteMovement, getMovementById, updateMovement } from '../db/movementsRepo';
+import { getMovementById, updateMovement } from '../db/movementsRepo';
 import { getFundById, getFundsWithBalances } from '../db/fundsRepo';
-import { unlinkOccurrenceForMovement } from '../recurring/recurringPayment';
+import { deleteMovementAndUnlinkOccurrence } from '../recurring/recurringPayment';
 import { useDb } from '../db/useDb';
 import { FundSelector, type SelectableFund } from '../components/FundSelector';
 import { iconForCategory } from '../categoryVisuals';
@@ -205,12 +205,14 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
         style: 'destructive',
         onPress: async () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          const occId = await unlinkOccurrenceForMovement(db, movementId);
-          await deleteMovement(db, movementId);
+          const occId = await deleteMovementAndUnlinkOccurrence(db, movementId);
           leavingRef.current = true;
-          navigation.navigate('Home', {
-            deletedMovement: movement ?? undefined,
-            deletedOccurrenceId: occId ?? undefined,
+          navigation.navigate('MainTabs', {
+            screen: 'HomeTab',
+            params: {
+              deletedMovement: movement ?? undefined,
+              deletedOccurrenceId: occId ?? undefined,
+            },
           });
         },
       },

@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as Application from 'expo-application';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   clearApiKey,
@@ -8,10 +11,14 @@ import {
   setApiKey,
   setSelectedProvider,
 } from '../services/apiKey';
+import { formatVersionInfo } from '../services/appVersion';
 import { useTheme, type Theme } from '../theme';
-import { AI_PROVIDERS, type AIProvider, type RootStackParamList } from '../types';
+import { AI_PROVIDERS, type AIProvider, type MainTabParamList, type RootStackParamList } from '../types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'SettingsTab'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 export default function SettingsScreen({ navigation }: Props) {
   const theme = useTheme();
@@ -29,6 +36,10 @@ export default function SettingsScreen({ navigation }: Props) {
   }, [provider]);
 
   const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)!;
+  const versionInfo = useMemo(
+    () => formatVersionInfo(Application.nativeApplicationVersion, Application.nativeBuildVersion),
+    []
+  );
 
   async function handleSelectProvider(next: AIProvider) {
     setProvider(next);
@@ -123,6 +134,11 @@ export default function SettingsScreen({ navigation }: Props) {
       <Pressable style={styles.clearButton} onPress={handleClear}>
         <Text style={styles.clearButtonText}>Borrar API key de {providerInfo.label}</Text>
       </Pressable>
+
+      <View style={styles.versionBlock}>
+        <Text style={styles.versionText}>GestorIA {versionInfo.version}</Text>
+        <Text style={styles.versionText}>Compilación {versionInfo.build}</Text>
+      </View>
     </View>
   );
 }
@@ -179,5 +195,7 @@ function createStyles(theme: Theme) {
     saveButtonText: { color: theme.primaryText, fontWeight: '700', fontSize: 16 },
     clearButton: { paddingVertical: 12, alignItems: 'center', marginTop: 8 },
     clearButtonText: { color: theme.danger, fontWeight: '600' },
+    versionBlock: { alignItems: 'center', marginTop: 32 },
+    versionText: { fontSize: 12, color: theme.textMuted },
   });
 }

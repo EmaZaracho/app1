@@ -1,11 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -13,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   adjustFundBalance,
@@ -48,31 +46,10 @@ export default function FundEditorScreen({ route, navigation }: Props) {
   const [currentBalance, setCurrentBalance] = useState(0);
   const [newBalance, setNewBalance] = useState('');
   const [saving, setSaving] = useState(false);
-  const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
-  // El botón atrás de Android oculta el teclado sin sacarle el foco al input,
-  // así que "onFocus" no alcanza para saber cuándo volver a hacer scroll: hay
-  // que reaccionar a cada aparición real del teclado (keyboardDidShow).
-  const balanceFieldFocusedRef = useRef(false);
 
   useEffect(() => {
     navigation.setOptions({ title: isEdit ? 'Editar fondo' : 'Nuevo fondo' });
   }, [navigation, isEdit]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
-      setAndroidKeyboardHeight(e.endCoordinates?.height ?? 0);
-      if (balanceFieldFocusedRef.current) {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }
-    });
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => setAndroidKeyboardHeight(0));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   useEffect(() => {
     if (fundId == null) return;
@@ -158,19 +135,15 @@ export default function FundEditorScreen({ route, navigation }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      contentContainerStyle={styles.container}
+      bottomOffset={24}
+      extraKeyboardSpace={24}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      showsVerticalScrollIndicator={false}
     >
-      <ScrollView
-        ref={scrollRef}
-        style={styles.flex}
-        contentContainerStyle={[
-          styles.container,
-          Platform.OS === 'android' && { paddingBottom: 60 + androidKeyboardHeight },
-        ]}
-        keyboardShouldPersistTaps="handled"
-      >
       <Text style={styles.label}>Nombre</Text>
       <TextInput
         style={styles.input}
@@ -274,13 +247,6 @@ export default function FundEditorScreen({ route, navigation }: Props) {
               keyboardType="numbers-and-punctuation"
               placeholder="Nuevo saldo"
               placeholderTextColor={theme.textMuted}
-              onFocus={() => {
-                balanceFieldFocusedRef.current = true;
-                scrollRef.current?.scrollToEnd({ animated: true });
-              }}
-              onBlur={() => {
-                balanceFieldFocusedRef.current = false;
-              }}
             />
             <Pressable style={styles.adjustButton} onPress={handleAdjust}>
               <Text style={styles.adjustButtonText}>Ajustar</Text>
@@ -288,8 +254,7 @@ export default function FundEditorScreen({ route, navigation }: Props) {
           </View>
         </View>
       ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 

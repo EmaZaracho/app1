@@ -1,85 +1,99 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
+import type { SqlDatabase } from '../db/sqlDatabase';
 import { getOccurrenceById } from '../db/recurringExpenseOccurrencesRepository';
 import { getRuleById } from '../db/recurringExpenseRulesRepository';
 import { getFundsWithBalances } from '../db/fundsRepo';
 import { registerOccurrencePayment } from '../recurring/recurringPayment';
-import { FundSelector, type SelectableFund } from '../components/FundSelector';
-import { CATEGORY_ICON } from '../categoryVisuals';
+import { assertFundsStillActive } from '../domain/movementRules';
+import { useMovementForm } from '../hooks/useMovementForm';
+import { MovementFormFields } from '../components/MovementFormFields';
+import type { SelectableFund } from '../components/FundSelector';
 import { useTheme, type Theme } from '../theme';
-import { EXPENSE_CATEGORIES, type ExpenseCategory, type RootStackParamList } from '../types';
+import type { ExpenseCategory, RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RegisterOccurrencePayment'>;
+
+interface PaymentFormData {
+  ruleName: string;
+  amountText: string;
+  category: ExpenseCategory;
+  description: string;
+  fundId: number | null;
+  funds: SelectableFund[];
+  activeFundOptions: { id: number; isDefault: boolean }[];
+}
 
 export default function RegisterOccurrencePaymentScreen({ route, navigation }: Props) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const db = useDb();
   const { occurrenceId } = route.params;
-
-  const [loaded, setLoaded] = useState(false);
-  const [ruleName, setRuleName] = useState('');
-  const [amountText, setAmountText] = useState('');
-  const [category, setCategory] = useState<ExpenseCategory>('Otros');
-  const [description, setDescription] = useState('');
-  const [funds, setFunds] = useState<SelectableFund[]>([]);
-  const [fundId, setFundId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<PaymentFormData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      const occ = await getOccurrenceById(db, occurrenceId);
-      if (!occ) return;
-      const rule = await getRuleById(db, occ.ruleId);
-      const active = await getFundsWithBalances(db, false);
-      setFunds(active.map((f) => ({ id: f.id, name: f.name, icon: f.icon, color: f.color })));
-      setRuleName(rule?.name ?? 'Gasto recurrente');
-      setDescription(rule?.name ?? 'Gasto recurrente');
-      setCategory(occ.category);
-      setAmountText(occ.projectedAmount != null ? String(occ.projectedAmount) : '');
-      setFundId(occ.fundAssignmentMode === 'fixed' ? occ.fundId : null);
-      setLoaded(true);
+    let activeRequest = true;
+    setLoading(true);
+    setLoadError(null);
+    setFormData(null);
+
+    void (async () => {
+      try {
+        const occurrence = await getOccurrenceById(db, occurrenceId);
+        if (!occurrence) {
+          throw new Error('La ocurrencia ya no existe.');
+        }
+        const [rule, activeFunds] = await Promise.all([
+          getRuleById(db, occurrence.ruleId),
+          getFundsWithBalances(db, false),
+        ]);
+        if (!activeRequest) return;
+        const ruleName = rule?.name ?? 'Gasto recurrente';
+        setFormData({
+          ruleName,
+          amountText: occurrence.projectedAmount != null ? String(occurrence.projectedAmount) : '',
+          category: occurrence.category,
+          description: ruleName,
+          fundId: occurrence.fundAssignmentMode === 'fixed' ? occurrence.fundId : null,
+          funds: activeFunds.map((fund) => ({
+            id: fund.id,
+            name: fund.name,
+            icon: fund.icon,
+            color: fund.color,
+          })),
+          activeFundOptions: activeFunds.map((fund) => ({
+            id: fund.id,
+            isDefault: fund.isDefault,
+          })),
+        });
+      } catch (err) {
+        if (activeRequest) {
+          setLoadError(err instanceof Error ? err.message : 'No se pudo cargar la ocurrencia.');
+        }
+      } finally {
+        if (activeRequest) setLoading(false);
+      }
     })();
+
+    return () => {
+      activeRequest = false;
+    };
   }, [db, occurrenceId]);
 
-  async function handleConfirm() {
-    const amount = Number(amountText.replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError('Ingresá un monto válido mayor a 0.');
-      return;
-    }
-    if (fundId == null) {
-      setError('Elegí el fondo desde el que se pagó.');
-      return;
-    }
-    if (!description.trim()) {
-      setError('Ingresá una descripción.');
-      return;
-    }
-    setError(null);
-    setSaving(true);
-    try {
-      await registerOccurrencePayment(db, {
-        occurrenceId,
-        amount,
-        category,
-        description: description.trim(),
-        fundId,
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      navigation.goBack();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo registrar el pago.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!loaded) {
+  if (loading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={theme.primary} />
@@ -87,50 +101,113 @@ export default function RegisterOccurrencePaymentScreen({ route, navigation }: P
     );
   }
 
-  return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Registrar pago de {ruleName}</Text>
-
-      <Text style={styles.label}>Monto real</Text>
-      <TextInput
-        style={styles.input}
-        value={amountText}
-        onChangeText={setAmountText}
-        keyboardType="decimal-pad"
-        placeholder="Monto pagado"
-        placeholderTextColor={theme.textMuted}
-      />
-
-      <Text style={styles.label}>Categoría</Text>
-      <View style={styles.chipsWrap}>
-        {EXPENSE_CATEGORIES.map((cat) => (
-          <Pressable
-            key={cat}
-            style={[styles.chip, category === cat && styles.chipSelected]}
-            onPress={() => setCategory(cat)}
-          >
-            <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>
-              {CATEGORY_ICON[cat]} {cat}
-            </Text>
-          </Pressable>
-        ))}
+  if (!formData) {
+    return (
+      <View style={styles.loading}>
+        <Text style={styles.errorText}>{loadError ?? 'No se pudo cargar la ocurrencia.'}</Text>
       </View>
+    );
+  }
 
-      <FundSelector label="¿Desde qué fondo se pagó?" funds={funds} selectedId={fundId} onSelect={setFundId} required />
+  return (
+    <PaymentForm
+      data={formData}
+      db={db}
+      navigation={navigation}
+      occurrenceId={occurrenceId}
+    />
+  );
+}
 
-      <Text style={styles.label}>Descripción</Text>
-      <TextInput style={styles.input} value={description} onChangeText={setDescription} />
+interface PaymentFormProps {
+  data: PaymentFormData;
+  db: SqlDatabase;
+  navigation: Props['navigation'];
+  occurrenceId: number;
+}
+
+function PaymentForm({ data, db, navigation, occurrenceId }: PaymentFormProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  // This child mounts only after the occurrence data is ready, so the hook
+  // receives the real initial values on its first render.
+  const form = useMovementForm({
+    lockedType: 'gasto',
+    initialAmountText: data.amountText,
+    initialCategory: data.category,
+    initialDescription: data.description,
+    initialSourceFundId: data.fundId,
+    activeFunds: data.activeFundOptions,
+  });
+
+  const handleConfirm = useCallback(async () => {
+    if (saving || !form.canSubmit) return;
+    const result = form.buildResult(`[recurrente] ${form.description.trim()}`);
+    if (!result.movement) {
+      setError(result.error);
+      return;
+    }
+    const activeIds = new Set(data.activeFundOptions.map((fund) => fund.id));
+    const fundError = assertFundsStillActive([result.movement.sourceFundId], activeIds);
+    if (fundError) {
+      setError(fundError);
+      return;
+    }
+
+    setError(null);
+    setSaving(true);
+    try {
+      await registerOccurrencePayment(db, {
+        occurrenceId,
+        amount: result.movement.amount,
+        category: result.movement.category as ExpenseCategory,
+        description: result.movement.description,
+        fundId: result.movement.sourceFundId!,
+      });
+      if (!mountedRef.current) return;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      navigation.goBack();
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setError(err instanceof Error ? err.message : 'No se pudo registrar el pago.');
+    } finally {
+      if (mountedRef.current) setSaving(false);
+    }
+  }, [saving, form, data.activeFundOptions, db, occurrenceId, navigation]);
+
+  return (
+    <KeyboardAwareScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.container}
+      bottomOffset={24}
+      extraKeyboardSpace={24}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={styles.title}>Registrar pago de {data.ruleName}</Text>
+
+      <MovementFormFields form={form} funds={data.funds} />
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <Pressable style={[styles.confirmButton, saving && styles.disabled]} onPress={handleConfirm} disabled={saving}>
+      <Pressable
+        style={[styles.confirmButton, (saving || !form.canSubmit) && styles.disabled]}
+        onPress={handleConfirm}
+        disabled={saving || !form.canSubmit}
+      >
         {saving ? (
           <ActivityIndicator color={theme.primaryText} />
         ) : (
           <Text style={styles.confirmText}>Registrar gasto</Text>
         )}
       </Pressable>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -140,22 +217,6 @@ function createStyles(theme: Theme) {
     loading: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg },
     container: { padding: 20, paddingBottom: 48 },
     title: { fontSize: 18, fontWeight: '800', color: theme.text },
-    label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 16, color: theme.text },
-    input: {
-      borderWidth: 1,
-      borderColor: theme.border,
-      backgroundColor: theme.surface,
-      color: theme.text,
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      fontSize: 16,
-    },
-    chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
-    chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
-    chipText: { fontSize: 13, color: theme.text },
-    chipTextSelected: { color: theme.primaryText, fontWeight: '600' },
     errorText: { color: theme.danger, marginTop: 16 },
     confirmButton: {
       backgroundColor: theme.primary,

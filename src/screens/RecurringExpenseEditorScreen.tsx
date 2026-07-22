@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
 import { getRuleById, insertRule } from '../db/recurringExpenseRulesRepository';
@@ -143,39 +153,47 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <KeyboardAwareScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.container}
+      bottomOffset={24}
+      extraKeyboardSpace={24}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      showsVerticalScrollIndicator={false}
+    >
       {!isEdit ? (
-        <View style={styles.aiBox}>
-          <Text style={styles.aiTitle}>Crear con DeepSeek</Text>
-          {hasDeepSeek ? (
-            <>
-              <TextInput
-                style={styles.aiInput}
-                value={aiText}
-                onChangeText={setAiText}
-                placeholder='Ej: "Internet se debita el 10 de cada mes por Mercado Pago, unos 25000"'
-                placeholderTextColor={theme.textMuted}
-                multiline
-              />
-              {aiError ? <Text style={styles.aiError}>{aiError}</Text> : null}
-              <Pressable style={styles.aiButton} onPress={handleInterpret} disabled={aiLoading}>
-                {aiLoading ? (
-                  <ActivityIndicator color={theme.primaryText} />
-                ) : (
-                  <Text style={styles.aiButtonText}>Interpretar</Text>
-                )}
+          <View style={styles.aiBox}>
+            <Text style={styles.aiTitle}>Crear con DeepSeek</Text>
+            {hasDeepSeek ? (
+              <>
+                <TextInput
+                  style={styles.aiInput}
+                  value={aiText}
+                  onChangeText={setAiText}
+                  placeholder='Ej: "Internet se debita el 10 de cada mes por Mercado Pago, unos 25000"'
+                  placeholderTextColor={theme.textMuted}
+                  multiline
+                />
+                {aiError ? <Text style={styles.aiError}>{aiError}</Text> : null}
+                <Pressable style={styles.aiButton} onPress={handleInterpret} disabled={aiLoading}>
+                  {aiLoading ? (
+                    <ActivityIndicator color={theme.primaryText} />
+                  ) : (
+                    <Text style={styles.aiButtonText}>Interpretar</Text>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+              <Pressable onPress={() => navigation.navigate('MainTabs', { screen: 'SettingsTab' })}>
+                <Text style={styles.aiHint}>
+                  Necesitás una API key de DeepSeek para esto. Tocá para ir a Configuración. Igual podés cargarlo
+                  manualmente abajo.
+                </Text>
               </Pressable>
-            </>
-          ) : (
-            <Pressable onPress={() => navigation.navigate('Settings')}>
-              <Text style={styles.aiHint}>
-                Necesitás una API key de DeepSeek para esto. Tocá para ir a Configuración. Igual podés cargarlo
-                manualmente abajo.
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      ) : null}
+            )}
+          </View>
+        ) : null}
 
       <RecurringExpenseForm
         key={formKey}
@@ -185,7 +203,7 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
         onSubmit={handleSubmit}
         saving={saving}
       />
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

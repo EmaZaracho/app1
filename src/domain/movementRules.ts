@@ -1,4 +1,12 @@
-import { isCategorizedType, type MovementType, type NewMovement } from '../types';
+import {
+  isCategorizedType,
+  isValidCategoryForType,
+  type AIMovementType,
+  type Category,
+  type CategorizedMovementType,
+  type MovementType,
+  type NewMovement,
+} from '../types';
 
 /**
  * Valida las invariantes de origen/destino/categoría de un movimiento.
@@ -195,4 +203,112 @@ export function buildAdjustmentMovement(
 /** Categoría no aplica salvo para gasto/ingreso. */
 export function categoryAppliesTo(type: MovementType): boolean {
   return isCategorizedType(type);
+}
+
+/**
+ * Construye el NewMovement de un gasto/ingreso/transferencia ya resuelto
+ * (fondos y tipo definidos). Es la única fábrica de estos tres tipos: la usan
+ * el registro manual, la vista previa de IA y el pago de una ocurrencia
+ * recurrente para no duplicar esta lógica en cada pantalla.
+ */
+export function buildNewMovement(
+  type: AIMovementType,
+  amount: number,
+  category: Category | null,
+  description: string,
+  rawText: string,
+  sourceFundId: number | null,
+  destinationFundId: number | null
+): NewMovement {
+  if (type === 'gasto') {
+    return {
+      type: 'gasto',
+      amount,
+      category: category ?? 'Otros',
+      description,
+      rawText,
+      sourceFundId,
+      destinationFundId: null,
+    };
+  }
+  if (type === 'ingreso') {
+    return {
+      type: 'ingreso',
+      amount,
+      category: category ?? 'Otros',
+      description,
+      rawText,
+      sourceFundId: null,
+      destinationFundId,
+    };
+  }
+  return { type: 'transferencia', amount, category: null, description, rawText, sourceFundId, destinationFundId };
+}
+
+export interface MovementFormInput {
+  type: AIMovementType;
+  amountText: string;
+  category: Category | null;
+  description: string;
+  sourceFundId: number | null;
+  destinationFundId: number | null;
+}
+
+export type MovementFormResult =
+  | { movement: NewMovement; error?: undefined }
+  | { movement?: undefined; error: string };
+
+/**
+ * Valida y construye el movimiento a partir de los campos crudos de
+ * MovementFormFields (texto de monto, descripción, categoría, fondos ya
+ * resueltos por `computeFundSelection`). Autoridad única de validación del
+ * formulario compartido: la reutilizan el registro manual, la vista previa
+ * de IA (cuando exige descripción) y el pago recurrente.
+ */
+export function buildMovementFromForm(input: MovementFormInput, rawText: string): MovementFormResult {
+  const amount = Number(input.amountText.replace(',', '.'));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: 'Ingresá un monto válido mayor a 0.' };
+  }
+  if (!input.description.trim()) {
+    return { error: 'Ingresá una descripción.' };
+  }
+  if (input.type !== 'transferencia') {
+    if (input.category == null) {
+      return { error: 'Elegí una categoría.' };
+    }
+    if (!isValidCategoryForType(input.category, input.type as CategorizedMovementType)) {
+      return { error: 'La categoría no es válida para este tipo de movimiento.' };
+    }
+  }
+
+  const movement = buildNewMovement(
+    input.type,
+    amount,
+    input.type === 'transferencia' ? null : input.category,
+    input.description.trim(),
+    rawText,
+    input.sourceFundId,
+    input.destinationFundId
+  );
+  const domainError = validateMovement(movement);
+  if (domainError) return { error: domainError };
+  return { movement };
+}
+
+/**
+ * Verifica que los fondos elegidos sigan activos (no archivados) al momento
+ * de guardar. Cubre el caso en que un fondo se archivó en otra pantalla
+ * mientras el formulario seguía abierto.
+ */
+export function assertFundsStillActive(
+  fundIds: (number | null)[],
+  activeFundIds: ReadonlySet<number>
+): string | null {
+  for (const id of fundIds) {
+    if (id != null && !activeFundIds.has(id)) {
+      return 'Uno de los fondos elegidos ya no está disponible (fue archivado). Elegí otro.';
+    }
+  }
+  return null;
 }

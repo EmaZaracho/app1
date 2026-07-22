@@ -44,7 +44,13 @@ export async function registerOccurrencePayment(
       [input.occurrenceId]
     );
     if (!occ) throw new Error('La ocurrencia no existe.');
-    if (occ.status === 'paid') throw new Error('Esta ocurrencia ya fue registrada.');
+    // Refuerzo de dominio: solo una ocurrencia con status persistido 'pending'
+    // puede pagarse (un 'overdue' visual sigue siendo 'pending' internamente,
+    // así que se acepta). paid/skipped/cancelled/deleted/cualquier otro se
+    // rechazan acá, no solo ocultando el botón en la UI.
+    if (occ.status !== 'pending') {
+      throw new Error('Solo se pueden registrar pagos de ocurrencias pendientes.');
+    }
 
     const result = await db.runAsync(
       `INSERT INTO movements
@@ -75,9 +81,8 @@ export async function registerOccurrencePayment(
 }
 
 /**
- * Antes de eliminar un movimiento vinculado a una ocurrencia: desvincula y
- * vuelve la ocurrencia a pending. Devuelve el id de la ocurrencia afectada (o
- * null). Se usa para poder re-vincular al deshacer. Transaccional.
+ * Desvincula una ocurrencia antes de borrar/restaurar un movimiento. La
+ * atomicidad con el borrado la aporta `deleteMovementAndUnlinkOccurrence`.
  */
 export async function unlinkOccurrenceForMovement(
   db: SqlDatabase,
@@ -95,6 +100,23 @@ export async function unlinkOccurrenceForMovement(
     [new Date().toISOString(), occ.id]
   );
   return occ.id;
+}
+
+/**
+ * Desvincula la ocurrencia asociada y elimina el movimiento en una sola
+ * transaccion. Devuelve el id de la ocurrencia para poder re-vincularla al
+ * deshacer.
+ */
+export async function deleteMovementAndUnlinkOccurrence(
+  db: SqlDatabase,
+  movementId: number
+): Promise<number | null> {
+  let occurrenceId: number | null = null;
+  await db.withTransactionAsync(async () => {
+    occurrenceId = await unlinkOccurrenceForMovement(db, movementId);
+    await db.runAsync('DELETE FROM movements WHERE id = ?', [movementId]);
+  });
+  return occurrenceId;
 }
 
 /** Re-vincula una ocurrencia con un movimiento restaurado (deshacer): status → paid. */
