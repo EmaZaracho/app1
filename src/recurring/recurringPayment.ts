@@ -81,9 +81,8 @@ export async function registerOccurrencePayment(
 }
 
 /**
- * Antes de eliminar un movimiento vinculado a una ocurrencia: desvincula y
- * vuelve la ocurrencia a pending. Devuelve el id de la ocurrencia afectada (o
- * null). Se usa para poder re-vincular al deshacer. Transaccional.
+ * Desvincula una ocurrencia antes de borrar/restaurar un movimiento. La
+ * atomicidad con el borrado la aporta `deleteMovementAndUnlinkOccurrence`.
  */
 export async function unlinkOccurrenceForMovement(
   db: SqlDatabase,
@@ -101,6 +100,23 @@ export async function unlinkOccurrenceForMovement(
     [new Date().toISOString(), occ.id]
   );
   return occ.id;
+}
+
+/**
+ * Desvincula la ocurrencia asociada y elimina el movimiento en una sola
+ * transaccion. Devuelve el id de la ocurrencia para poder re-vincularla al
+ * deshacer.
+ */
+export async function deleteMovementAndUnlinkOccurrence(
+  db: SqlDatabase,
+  movementId: number
+): Promise<number | null> {
+  let occurrenceId: number | null = null;
+  await db.withTransactionAsync(async () => {
+    occurrenceId = await unlinkOccurrenceForMovement(db, movementId);
+    await db.runAsync('DELETE FROM movements WHERE id = ?', [movementId]);
+  });
+  return occurrenceId;
 }
 
 /** Re-vincula una ocurrencia con un movimiento restaurado (deshacer): status → paid. */

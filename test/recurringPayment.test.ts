@@ -7,6 +7,7 @@ import {
 } from '../src/db/recurringExpenseOccurrencesRepository';
 import { ensureOccurrencesForMonth } from '../src/recurring/recurringOccurrenceGenerator';
 import {
+  deleteMovementAndUnlinkOccurrence,
   reconcileOccurrences,
   registerOccurrencePayment,
   relinkOccurrence,
@@ -84,6 +85,47 @@ describe('registro y vinculación de movimiento', () => {
     const after = await getOccurrenceById(db, occ.id);
     expect(after?.storedStatus).toBe('pending');
     expect(after?.linkedMovementId).toBeNull();
+  });
+
+  it('elimina y desvincula atomicamente', async () => {
+    const { db, fundId, occ } = await setup();
+    const movementId = await registerOccurrencePayment(db, {
+      occurrenceId: occ.id,
+      amount: 100,
+      category: 'Servicios',
+      description: 'x',
+      fundId,
+    });
+
+    await expect(deleteMovementAndUnlinkOccurrence(db, movementId)).resolves.toBe(occ.id);
+    expect(await getMovementById(db, movementId)).toBeNull();
+    const after = await getOccurrenceById(db, occ.id);
+    expect(after?.storedStatus).toBe('pending');
+    expect(after?.linkedMovementId).toBeNull();
+  });
+
+  it('revierte la desvinculacion si falla el borrado', async () => {
+    const { db, fundId, occ } = await setup();
+    const movementId = await registerOccurrencePayment(db, {
+      occurrenceId: occ.id,
+      amount: 100,
+      category: 'Servicios',
+      description: 'x',
+      fundId,
+    });
+    await db.execAsync(`
+      CREATE TRIGGER fail_movement_delete
+      BEFORE DELETE ON movements
+      BEGIN
+        SELECT RAISE(ABORT, 'forced delete failure');
+      END;
+    `);
+
+    await expect(deleteMovementAndUnlinkOccurrence(db, movementId)).rejects.toThrow('forced delete failure');
+    expect(await getMovementById(db, movementId)).not.toBeNull();
+    const after = await getOccurrenceById(db, occ.id);
+    expect(after?.storedStatus).toBe('paid');
+    expect(after?.linkedMovementId).toBe(movementId);
   });
 
   it('reconcile revierte a pending si el movimiento se borró sin unlink (FK SET NULL)', async () => {

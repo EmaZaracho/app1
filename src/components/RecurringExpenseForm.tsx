@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, type RefObject } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useTheme, type Theme } from '../theme';
 import { FundSelector, type SelectableFund } from './FundSelector';
@@ -17,8 +17,6 @@ interface RecurringExpenseFormProps {
   submitLabel: string;
   onSubmit: (input: RecurringRuleInput) => void;
   saving?: boolean;
-  /** Se llama al enfocar cualquier campo de texto, pasando su propio ref (para scroll-into-view del contenedor). */
-  onInputFocus?: (ref: RefObject<TextInput | null>) => void;
 }
 
 const AMOUNT_MODES: { value: RecurringAmountMode; label: string }[] = [
@@ -33,16 +31,9 @@ export function RecurringExpenseForm({
   submitLabel,
   onSubmit,
   saving,
-  onInputFocus,
 }: RecurringExpenseFormProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const nameInputRef = useRef<TextInput>(null);
-  const descriptionInputRef = useRef<TextInput>(null);
-  const amountInputRef = useRef<TextInput>(null);
-  const dayInputRef = useRef<TextInput>(null);
-  const startDateInputRef = useRef<TextInput>(null);
-  const endDateInputRef = useRef<TextInput>(null);
 
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description ?? '');
@@ -88,24 +79,20 @@ export function RecurringExpenseForm({
     <View>
       <Text style={styles.label}>Nombre</Text>
       <TextInput
-        ref={nameInputRef}
         style={styles.input}
         value={name}
         onChangeText={setName}
         placeholder="Ej: Internet"
         placeholderTextColor={theme.textMuted}
-        onFocus={() => onInputFocus?.(nameInputRef)}
       />
 
       <Text style={styles.label}>Descripción (opcional)</Text>
       <TextInput
-        ref={descriptionInputRef}
         style={styles.input}
         value={description}
         onChangeText={setDescription}
         placeholder="Detalle opcional"
         placeholderTextColor={theme.textMuted}
-        onFocus={() => onInputFocus?.(descriptionInputRef)}
       />
 
       <Text style={styles.label}>Categoría</Text>
@@ -139,14 +126,12 @@ export function RecurringExpenseForm({
       </View>
       {amountMode !== 'unknown' ? (
         <TextInput
-          ref={amountInputRef}
           style={[styles.input, styles.marginTop]}
           value={amountText}
           onChangeText={setAmountText}
           keyboardType="decimal-pad"
           placeholder="Monto"
           placeholderTextColor={theme.textMuted}
-          onFocus={() => onInputFocus?.(amountInputRef)}
         />
       ) : null}
 
@@ -175,38 +160,32 @@ export function RecurringExpenseForm({
 
       <Text style={styles.label}>Día del mes (1–31)</Text>
       <TextInput
-        ref={dayInputRef}
         style={styles.input}
         value={dayText}
         onChangeText={setDayText}
         keyboardType="number-pad"
         placeholder="10"
         placeholderTextColor={theme.textMuted}
-        onFocus={() => onInputFocus?.(dayInputRef)}
       />
 
       <Text style={styles.label}>Fecha de inicio (AAAA-MM-DD)</Text>
       <TextInput
-        ref={startDateInputRef}
         style={styles.input}
         value={startDate}
         onChangeText={setStartDate}
         autoCapitalize="none"
         placeholder="2026-08-01"
         placeholderTextColor={theme.textMuted}
-        onFocus={() => onInputFocus?.(startDateInputRef)}
       />
 
       <Text style={styles.label}>Fecha final (opcional)</Text>
       <TextInput
-        ref={endDateInputRef}
         style={styles.input}
         value={endDate}
         onChangeText={setEndDate}
         autoCapitalize="none"
         placeholder="AAAA-MM-DD"
         placeholderTextColor={theme.textMuted}
-        onFocus={() => onInputFocus?.(endDateInputRef)}
       />
 
       <View style={styles.switchRow}>

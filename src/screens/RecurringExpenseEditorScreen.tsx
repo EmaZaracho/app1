@@ -2,16 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
 import { getRuleById, insertRule } from '../db/recurringExpenseRulesRepository';
@@ -21,7 +20,6 @@ import { getFundsWithBalances, getFundMatchTargets } from '../db/fundsRepo';
 import { getApiKey } from '../services/apiKey';
 import { interpretRecurringExpense, AIProviderError } from '../services/recurringExpenseAI';
 import { RecurringExpenseForm } from '../components/RecurringExpenseForm';
-import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { todayLocalDateString, toMonthKey } from '../recurring/recurringDateUtils';
 import type { SelectableFund } from '../components/FundSelector';
 import { useTheme, type Theme } from '../theme';
@@ -52,7 +50,6 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
   const db = useDb();
   const ruleId = route.params?.ruleId;
   const isEdit = ruleId != null;
-  const kb = useKeyboardAwareScroll();
 
   const [funds, setFunds] = useState<SelectableFund[]>([]);
   const [initial, setInitial] = useState<RecurringRuleInput | null>(route.params?.draft ?? null);
@@ -156,17 +153,16 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        ref={kb.scrollRef}
-        style={styles.flex}
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        onScroll={kb.onScroll}
-        scrollEventThrottle={kb.scrollEventThrottle}
-      >
-        {!isEdit ? (
+    <KeyboardAwareScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.container}
+      bottomOffset={24}
+      extraKeyboardSpace={24}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      showsVerticalScrollIndicator={false}
+    >
+      {!isEdit ? (
           <View style={styles.aiBox}>
             <Text style={styles.aiTitle}>Crear con DeepSeek</Text>
             {hasDeepSeek ? (
@@ -199,17 +195,15 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
           </View>
         ) : null}
 
-        <RecurringExpenseForm
-          key={formKey}
-          initial={initial}
-          funds={funds}
-          submitLabel={isEdit ? 'Guardar cambios' : 'Crear recurrencia'}
-          onSubmit={handleSubmit}
-          saving={saving}
-          onInputFocus={kb.registerFocusedInput}
-        />
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <RecurringExpenseForm
+        key={formKey}
+        initial={initial}
+        funds={funds}
+        submitLabel={isEdit ? 'Guardar cambios' : 'Crear recurrencia'}
+        onSubmit={handleSubmit}
+        saving={saving}
+      />
+    </KeyboardAwareScrollView>
   );
 }
 

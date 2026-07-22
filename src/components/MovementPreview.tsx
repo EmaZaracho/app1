@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useMovementForm } from '../hooks/useMovementForm';
-import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { MovementFormFields } from './MovementFormFields';
 import { formatCurrency } from '../utils/format';
 import { useTheme, type Theme } from '../theme';
@@ -41,7 +41,6 @@ export function MovementPreview({
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [error, setError] = useState<string | null>(null);
-  const kb = useKeyboardAwareScroll();
 
   const selectableFunds = useMemo(
     () => funds.map((f) => ({ id: f.id, name: f.name, icon: f.icon, color: f.color })),
@@ -82,15 +81,16 @@ export function MovementPreview({
   }
 
   return (
-    <ScrollView
-      ref={kb.scrollRef}
+    <KeyboardAwareScrollView
       style={styles.previewCard}
+      contentContainerStyle={styles.previewContent}
+      bottomOffset={24}
+      extraKeyboardSpace={24}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-      onScroll={kb.onScroll}
-      scrollEventThrottle={kb.scrollEventThrottle}
+      showsVerticalScrollIndicator={false}
     >
-      <MovementFormFields form={form} funds={selectableFunds} onInputFocus={kb.registerFocusedInput} />
+      <MovementFormFields form={form} funds={selectableFunds} />
 
       {negativeWarning ? <Text style={styles.warningText}>⚠️ {negativeWarning}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -107,19 +107,19 @@ export function MovementPreview({
           <Text style={styles.previewConfirmText}>Confirmar</Text>
         </Pressable>
       </View>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     previewCard: {
-      maxHeight: 380,
-      padding: 16,
+      maxHeight: '70%',
       backgroundColor: theme.surface,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.border,
     },
+    previewContent: { padding: 16 },
     warningText: { color: theme.warningText, fontSize: 13, marginTop: 10 },
     errorText: { color: theme.danger, fontSize: 13, marginTop: 10 },
     previewActions: { flexDirection: 'row', gap: 8, marginTop: 14, marginBottom: 8 },

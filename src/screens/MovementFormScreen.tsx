@@ -1,22 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
 import { addMovement, getFundsWithBalances } from '../db/database';
 import { assertFundsStillActive } from '../domain/movementRules';
 import { useMovementForm } from '../hooks/useMovementForm';
-import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { MovementFormFields } from '../components/MovementFormFields';
 import type { SelectableFund } from '../components/FundSelector';
 import { useTheme, type Theme } from '../theme';
@@ -66,7 +64,6 @@ export default function MovementFormScreen({ route, navigation }: Props) {
     initialType,
     activeFunds: activeFundOptions,
   });
-  const kb = useKeyboardAwareScroll();
 
   useEffect(() => {
     navigation.setOptions({ title: TITLE[form.type] });
@@ -113,17 +110,16 @@ export default function MovementFormScreen({ route, navigation }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        ref={kb.scrollRef}
-        style={styles.flex}
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        onScroll={kb.onScroll}
-        scrollEventThrottle={kb.scrollEventThrottle}
-      >
-        <MovementFormFields form={form} funds={funds} onInputFocus={kb.registerFocusedInput} />
+    <KeyboardAwareScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.container}
+      bottomOffset={24}
+      extraKeyboardSpace={24}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      showsVerticalScrollIndicator={false}
+    >
+      <MovementFormFields form={form} funds={funds} />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -134,8 +130,7 @@ export default function MovementFormScreen({ route, navigation }: Props) {
         >
           {saving ? <ActivityIndicator color={theme.primaryText} /> : <Text style={styles.submitText}>Guardar</Text>}
         </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 

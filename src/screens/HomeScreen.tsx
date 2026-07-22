@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,13 +11,13 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { deleteMovement } from '../db/database';
 import { useDb } from '../db/useDb';
 import { getApiKey } from '../services/apiKey';
-import { unlinkOccurrenceForMovement } from '../recurring/recurringPayment';
+import { deleteMovementAndUnlinkOccurrence } from '../recurring/recurringPayment';
 import { useHomeData } from '../hooks/useHomeData';
 import { useMovementFilters } from '../hooks/useMovementFilters';
 import { useMovementComposer } from '../hooks/useMovementComposer';
@@ -98,9 +97,7 @@ export default function HomeScreen({ navigation, route }: Props) {
 
   async function handleSwipeDelete(movement: Movement) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Desvincular (y volver la ocurrencia a pending) antes de borrar el movimiento.
-    const occId = await unlinkOccurrenceForMovement(db, movement.id);
-    await deleteMovement(db, movement.id);
+    const occId = await deleteMovementAndUnlinkOccurrence(db, movement.id);
     undo.showUndoBanner(movement, occId);
     await homeData.reload();
   }
@@ -122,7 +119,7 @@ export default function HomeScreen({ navigation, route }: Props) {
   const displayError = composer.error ?? receiptScanner.error;
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={styles.flex}>
       {!homeData.initialLoading && homeData.slides.length > 0 ? (
         <FundCarousel
           slides={homeData.slides}
@@ -176,7 +173,8 @@ export default function HomeScreen({ navigation, route }: Props) {
 
       {displayError ? <Text style={styles.errorText}>{displayError}</Text> : null}
 
-      {composer.preview ? (
+      <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+        {composer.preview ? (
         <MovementPreview
           key={composer.preview.key}
           initialType={composer.preview.type}
@@ -227,8 +225,9 @@ export default function HomeScreen({ navigation, route }: Props) {
             )}
           </Pressable>
         </View>
-      )}
-    </KeyboardAvoidingView>
+        )}
+      </KeyboardStickyView>
+    </View>
   );
 }
 

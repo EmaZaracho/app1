@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, type RefObject } from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme, type Theme } from '../theme';
 import { FundSelector, type SelectableFund } from './FundSelector';
@@ -15,8 +15,6 @@ const TYPE_LABEL: Record<AIMovementType, string> = {
 interface MovementFormFieldsProps {
   form: MovementFormState;
   funds: SelectableFund[];
-  /** Se llama al enfocar el monto o la descripción, pasando su propio ref (para scroll-into-view del contenedor). */
-  onInputFocus?: (ref: RefObject<TextInput | null>) => void;
 }
 
 /**
@@ -24,11 +22,9 @@ interface MovementFormFieldsProps {
  * por el registro manual, la vista previa de IA y el pago de una ocurrencia
  * recurrente. Presentacional: todo el estado vive en `useMovementForm`.
  */
-export function MovementFormFields({ form, funds, onInputFocus }: MovementFormFieldsProps) {
+export function MovementFormFields({ form, funds }: MovementFormFieldsProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const amountInputRef = useRef<TextInput>(null);
-  const descriptionInputRef = useRef<TextInput>(null);
 
   const showCategoryChips = form.type !== 'transferencia';
   const showSourceSelector = form.type === 'gasto' || form.type === 'transferencia';
@@ -57,14 +53,12 @@ export function MovementFormFields({ form, funds, onInputFocus }: MovementFormFi
           ))
         )}
         <TextInput
-          ref={amountInputRef}
           style={styles.amountInput}
           value={form.amountText}
           onChangeText={form.setAmountText}
           keyboardType="decimal-pad"
           placeholder="Monto"
           placeholderTextColor={theme.textMuted}
-          onFocus={() => onInputFocus?.(amountInputRef)}
         />
       </View>
 
@@ -111,13 +105,11 @@ export function MovementFormFields({ form, funds, onInputFocus }: MovementFormFi
       ) : null}
 
       <TextInput
-        ref={descriptionInputRef}
         style={styles.descriptionInput}
         value={form.description}
         onChangeText={form.setDescription}
         placeholder="Descripción"
         placeholderTextColor={theme.textMuted}
-        onFocus={() => onInputFocus?.(descriptionInputRef)}
       />
     </View>
   );

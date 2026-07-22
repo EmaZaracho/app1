@@ -1,24 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
+import type { SqlDatabase } from '../db/sqlDatabase';
 import { getOccurrenceById } from '../db/recurringExpenseOccurrencesRepository';
 import { getRuleById } from '../db/recurringExpenseRulesRepository';
 import { getFundsWithBalances } from '../db/fundsRepo';
 import { registerOccurrencePayment } from '../recurring/recurringPayment';
 import { assertFundsStillActive } from '../domain/movementRules';
 import { useMovementForm } from '../hooks/useMovementForm';
-import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { MovementFormFields } from '../components/MovementFormFields';
 import type { SelectableFund } from '../components/FundSelector';
 import { useTheme, type Theme } from '../theme';
@@ -26,55 +25,125 @@ import type { ExpenseCategory, RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RegisterOccurrencePayment'>;
 
+interface PaymentFormData {
+  ruleName: string;
+  amountText: string;
+  category: ExpenseCategory;
+  description: string;
+  fundId: number | null;
+  funds: SelectableFund[];
+  activeFundOptions: { id: number; isDefault: boolean }[];
+}
+
 export default function RegisterOccurrencePaymentScreen({ route, navigation }: Props) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const db = useDb();
   const { occurrenceId } = route.params;
+  const [formData, setFormData] = useState<PaymentFormData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [loaded, setLoaded] = useState(false);
-  const [ruleName, setRuleName] = useState('');
-  const [initialAmountText, setInitialAmountText] = useState('');
-  const [initialCategory, setInitialCategory] = useState<ExpenseCategory>('Otros');
-  const [initialDescription, setInitialDescription] = useState('');
-  const [initialFundId, setInitialFundId] = useState<number | null>(null);
-  const [funds, setFunds] = useState<SelectableFund[]>([]);
-  const [activeFundOptions, setActiveFundOptions] = useState<{ id: number; isDefault: boolean }[]>([]);
+  useEffect(() => {
+    let activeRequest = true;
+    setLoading(true);
+    setLoadError(null);
+    setFormData(null);
+
+    void (async () => {
+      try {
+        const occurrence = await getOccurrenceById(db, occurrenceId);
+        if (!occurrence) {
+          throw new Error('La ocurrencia ya no existe.');
+        }
+        const [rule, activeFunds] = await Promise.all([
+          getRuleById(db, occurrence.ruleId),
+          getFundsWithBalances(db, false),
+        ]);
+        if (!activeRequest) return;
+        const ruleName = rule?.name ?? 'Gasto recurrente';
+        setFormData({
+          ruleName,
+          amountText: occurrence.projectedAmount != null ? String(occurrence.projectedAmount) : '',
+          category: occurrence.category,
+          description: ruleName,
+          fundId: occurrence.fundAssignmentMode === 'fixed' ? occurrence.fundId : null,
+          funds: activeFunds.map((fund) => ({
+            id: fund.id,
+            name: fund.name,
+            icon: fund.icon,
+            color: fund.color,
+          })),
+          activeFundOptions: activeFunds.map((fund) => ({
+            id: fund.id,
+            isDefault: fund.isDefault,
+          })),
+        });
+      } catch (err) {
+        if (activeRequest) {
+          setLoadError(err instanceof Error ? err.message : 'No se pudo cargar la ocurrencia.');
+        }
+      } finally {
+        if (activeRequest) setLoading(false);
+      }
+    })();
+
+    return () => {
+      activeRequest = false;
+    };
+  }, [db, occurrenceId]);
+
+  if (loading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (!formData) {
+    return (
+      <View style={styles.loading}>
+        <Text style={styles.errorText}>{loadError ?? 'No se pudo cargar la ocurrencia.'}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <PaymentForm
+      data={formData}
+      db={db}
+      navigation={navigation}
+      occurrenceId={occurrenceId}
+    />
+  );
+}
+
+interface PaymentFormProps {
+  data: PaymentFormData;
+  db: SqlDatabase;
+  navigation: Props['navigation'];
+  occurrenceId: number;
+}
+
+function PaymentForm({ data, db, navigation, occurrenceId }: PaymentFormProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
 
-  useEffect(() => {
-    (async () => {
-      const occ = await getOccurrenceById(db, occurrenceId);
-      if (!occ) return;
-      const rule = await getRuleById(db, occ.ruleId);
-      const active = await getFundsWithBalances(db, false);
-      if (!mountedRef.current) return;
-      setFunds(active.map((f) => ({ id: f.id, name: f.name, icon: f.icon, color: f.color })));
-      setActiveFundOptions(active.map((f) => ({ id: f.id, isDefault: f.isDefault })));
-      setRuleName(rule?.name ?? 'Gasto recurrente');
-      setInitialDescription(rule?.name ?? 'Gasto recurrente');
-      setInitialCategory(occ.category);
-      setInitialAmountText(occ.projectedAmount != null ? String(occ.projectedAmount) : '');
-      setInitialFundId(occ.fundAssignmentMode === 'fixed' ? occ.fundId : null);
-      setLoaded(true);
-    })();
-  }, [db, occurrenceId]);
-
-  // Tipo fijo 'gasto': un pago de ocurrencia recurrente nunca puede convertirse
-  // en ingreso o transferencia. Nunca se pasa `defaultFundId`: con fondo fijo
-  // ya viene precompletado, y con ask_on_payment se debe elegir explícitamente.
+  // This child mounts only after the occurrence data is ready, so the hook
+  // receives the real initial values on its first render.
   const form = useMovementForm({
     lockedType: 'gasto',
-    initialAmountText,
-    initialCategory,
-    initialDescription,
-    initialSourceFundId: initialFundId,
-    activeFunds: activeFundOptions,
+    initialAmountText: data.amountText,
+    initialCategory: data.category,
+    initialDescription: data.description,
+    initialSourceFundId: data.fundId,
+    activeFunds: data.activeFundOptions,
   });
-  const kb = useKeyboardAwareScroll();
 
   const handleConfirm = useCallback(async () => {
     if (saving || !form.canSubmit) return;
@@ -83,7 +152,7 @@ export default function RegisterOccurrencePaymentScreen({ route, navigation }: P
       setError(result.error);
       return;
     }
-    const activeIds = new Set(activeFundOptions.map((f) => f.id));
+    const activeIds = new Set(data.activeFundOptions.map((fund) => fund.id));
     const fundError = assertFundsStillActive([result.movement.sourceFundId], activeIds);
     if (fundError) {
       setError(fundError);
@@ -109,46 +178,36 @@ export default function RegisterOccurrencePaymentScreen({ route, navigation }: P
     } finally {
       if (mountedRef.current) setSaving(false);
     }
-  }, [saving, form, activeFundOptions, db, occurrenceId, navigation]);
-
-  if (!loaded) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={theme.primary} />
-      </View>
-    );
-  }
+  }, [saving, form, data.activeFundOptions, db, occurrenceId, navigation]);
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        ref={kb.scrollRef}
-        style={styles.flex}
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        onScroll={kb.onScroll}
-        scrollEventThrottle={kb.scrollEventThrottle}
+    <KeyboardAwareScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.container}
+      bottomOffset={24}
+      extraKeyboardSpace={24}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={styles.title}>Registrar pago de {data.ruleName}</Text>
+
+      <MovementFormFields form={form} funds={data.funds} />
+
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      <Pressable
+        style={[styles.confirmButton, (saving || !form.canSubmit) && styles.disabled]}
+        onPress={handleConfirm}
+        disabled={saving || !form.canSubmit}
       >
-        <Text style={styles.title}>Registrar pago de {ruleName}</Text>
-
-        <MovementFormFields form={form} funds={funds} onInputFocus={kb.registerFocusedInput} />
-
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        <Pressable
-          style={[styles.confirmButton, (saving || !form.canSubmit) && styles.disabled]}
-          onPress={handleConfirm}
-          disabled={saving || !form.canSubmit}
-        >
-          {saving ? (
-            <ActivityIndicator color={theme.primaryText} />
-          ) : (
-            <Text style={styles.confirmText}>Registrar gasto</Text>
-          )}
-        </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        {saving ? (
+          <ActivityIndicator color={theme.primaryText} />
+        ) : (
+          <Text style={styles.confirmText}>Registrar gasto</Text>
+        )}
+      </Pressable>
+    </KeyboardAwareScrollView>
   );
 }
 
