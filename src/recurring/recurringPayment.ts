@@ -44,7 +44,13 @@ export async function registerOccurrencePayment(
       [input.occurrenceId]
     );
     if (!occ) throw new Error('La ocurrencia no existe.');
-    if (occ.status === 'paid') throw new Error('Esta ocurrencia ya fue registrada.');
+    // Refuerzo de dominio: solo una ocurrencia con status persistido 'pending'
+    // puede pagarse (un 'overdue' visual sigue siendo 'pending' internamente,
+    // así que se acepta). paid/skipped/cancelled/deleted/cualquier otro se
+    // rechazan acá, no solo ocultando el botón en la UI.
+    if (occ.status !== 'pending') {
+      throw new Error('Solo se pueden registrar pagos de ocurrencias pendientes.');
+    }
 
     const result = await db.runAsync(
       `INSERT INTO movements

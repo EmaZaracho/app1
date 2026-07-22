@@ -17,6 +17,8 @@ interface RecurringExpenseFormProps {
   submitLabel: string;
   onSubmit: (input: RecurringRuleInput) => void;
   saving?: boolean;
+  /** Se llama al enfocar un campo cercano al final del formulario (día/fechas), para que el contenedor pueda hacer scroll y no quede tapado por el teclado. */
+  onFocusBottomField?: () => void;
 }
 
 const AMOUNT_MODES: { value: RecurringAmountMode; label: string }[] = [
@@ -31,6 +33,7 @@ export function RecurringExpenseForm({
   submitLabel,
   onSubmit,
   saving,
+  onFocusBottomField,
 }: RecurringExpenseFormProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -166,6 +169,7 @@ export function RecurringExpenseForm({
         keyboardType="number-pad"
         placeholder="10"
         placeholderTextColor={theme.textMuted}
+        onFocus={onFocusBottomField}
       />
 
       <Text style={styles.label}>Fecha de inicio (AAAA-MM-DD)</Text>
@@ -176,6 +180,7 @@ export function RecurringExpenseForm({
         autoCapitalize="none"
         placeholder="2026-08-01"
         placeholderTextColor={theme.textMuted}
+        onFocus={onFocusBottomField}
       />
 
       <Text style={styles.label}>Fecha final (opcional)</Text>
@@ -186,6 +191,7 @@ export function RecurringExpenseForm({
         autoCapitalize="none"
         placeholder="AAAA-MM-DD"
         placeholderTextColor={theme.textMuted}
+        onFocus={onFocusBottomField}
       />
 
       <View style={styles.switchRow}>

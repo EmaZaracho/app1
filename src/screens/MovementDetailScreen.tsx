@@ -208,9 +208,12 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
           const occId = await unlinkOccurrenceForMovement(db, movementId);
           await deleteMovement(db, movementId);
           leavingRef.current = true;
-          navigation.navigate('Home', {
-            deletedMovement: movement ?? undefined,
-            deletedOccurrenceId: occId ?? undefined,
+          navigation.navigate('MainTabs', {
+            screen: 'HomeTab',
+            params: {
+              deletedMovement: movement ?? undefined,
+              deletedOccurrenceId: occId ?? undefined,
+            },
           });
         },
       },

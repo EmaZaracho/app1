@@ -1,5 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
@@ -40,6 +51,7 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
   const db = useDb();
   const ruleId = route.params?.ruleId;
   const isEdit = ruleId != null;
+  const scrollRef = useRef<ScrollView>(null);
 
   const [funds, setFunds] = useState<SelectableFund[]>([]);
   const [initial, setInitial] = useState<RecurringRuleInput | null>(route.params?.draft ?? null);
@@ -143,49 +155,57 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      {!isEdit ? (
-        <View style={styles.aiBox}>
-          <Text style={styles.aiTitle}>Crear con DeepSeek</Text>
-          {hasDeepSeek ? (
-            <>
-              <TextInput
-                style={styles.aiInput}
-                value={aiText}
-                onChangeText={setAiText}
-                placeholder='Ej: "Internet se debita el 10 de cada mes por Mercado Pago, unos 25000"'
-                placeholderTextColor={theme.textMuted}
-                multiline
-              />
-              {aiError ? <Text style={styles.aiError}>{aiError}</Text> : null}
-              <Pressable style={styles.aiButton} onPress={handleInterpret} disabled={aiLoading}>
-                {aiLoading ? (
-                  <ActivityIndicator color={theme.primaryText} />
-                ) : (
-                  <Text style={styles.aiButtonText}>Interpretar</Text>
-                )}
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.flex}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        {!isEdit ? (
+          <View style={styles.aiBox}>
+            <Text style={styles.aiTitle}>Crear con DeepSeek</Text>
+            {hasDeepSeek ? (
+              <>
+                <TextInput
+                  style={styles.aiInput}
+                  value={aiText}
+                  onChangeText={setAiText}
+                  placeholder='Ej: "Internet se debita el 10 de cada mes por Mercado Pago, unos 25000"'
+                  placeholderTextColor={theme.textMuted}
+                  multiline
+                />
+                {aiError ? <Text style={styles.aiError}>{aiError}</Text> : null}
+                <Pressable style={styles.aiButton} onPress={handleInterpret} disabled={aiLoading}>
+                  {aiLoading ? (
+                    <ActivityIndicator color={theme.primaryText} />
+                  ) : (
+                    <Text style={styles.aiButtonText}>Interpretar</Text>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+              <Pressable onPress={() => navigation.navigate('MainTabs', { screen: 'SettingsTab' })}>
+                <Text style={styles.aiHint}>
+                  Necesitás una API key de DeepSeek para esto. Tocá para ir a Configuración. Igual podés cargarlo
+                  manualmente abajo.
+                </Text>
               </Pressable>
-            </>
-          ) : (
-            <Pressable onPress={() => navigation.navigate('Settings')}>
-              <Text style={styles.aiHint}>
-                Necesitás una API key de DeepSeek para esto. Tocá para ir a Configuración. Igual podés cargarlo
-                manualmente abajo.
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      ) : null}
+            )}
+          </View>
+        ) : null}
 
-      <RecurringExpenseForm
-        key={formKey}
-        initial={initial}
-        funds={funds}
-        submitLabel={isEdit ? 'Guardar cambios' : 'Crear recurrencia'}
-        onSubmit={handleSubmit}
-        saving={saving}
-      />
-    </ScrollView>
+        <RecurringExpenseForm
+          key={formKey}
+          initial={initial}
+          funds={funds}
+          submitLabel={isEdit ? 'Guardar cambios' : 'Crear recurrencia'}
+          onSubmit={handleSubmit}
+          saving={saving}
+          onFocusBottomField={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

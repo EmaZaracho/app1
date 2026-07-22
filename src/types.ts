@@ -1,3 +1,4 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { ParsedReceipt } from './services/receiptTypes';
 import type { RecurringRuleInput } from './types/recurringExpenses';
 
@@ -123,12 +124,23 @@ export interface HomeMovementFilter {
   periodEnd?: string;
 }
 
-export type RootStackParamList = {
-  Home:
+/** Las cuatro pestañas raíz, siempre con la barra inferior visible. */
+export type MainTabParamList = {
+  HomeTab:
     | { deletedMovement?: Movement; deletedOccurrenceId?: number; filter?: HomeMovementFilter }
     | undefined;
-  Summary: undefined;
-  Settings: undefined;
+  CalendarTab: undefined;
+  SummaryTab: undefined;
+  SettingsTab: undefined;
+};
+
+/**
+ * Formularios y detalles: se presentan por encima de MainTabs, así que la
+ * barra inferior queda oculta automáticamente por la jerarquía de navegadores.
+ */
+export type RootStackParamList = {
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  MovementForm: { initialType?: AIMovementType } | undefined;
   Budgets: undefined;
   Funds: undefined;
   FundEditor: { fundId?: number } | undefined;
@@ -136,7 +148,6 @@ export type RootStackParamList = {
   FinancialInsights: undefined;
   CategoryPrioritySettings: undefined;
   ReceiptReview: { receipt: ParsedReceipt };
-  FinancialCalendar: undefined;
   RecurringExpenseEditor: { ruleId?: number; draft?: RecurringRuleInput } | undefined;
   RecurringExpenseDetail: { ruleId: number };
   RecurringOccurrenceDetail: { occurrenceId: number };

@@ -209,12 +209,15 @@ export default function FinancialInsightsScreen() {
     } else if (rec.actionType === 'configure_savings_goal') {
       Alert.alert('Configurar meta', 'Usá la tarjeta "Meta de ahorro" más arriba para configurarla.');
     } else if (rec.actionType === 'view_movements' && snapshot) {
-      navigation.navigate('Home', {
-        filter: {
-          type: 'gasto',
-          category: rec.relatedCategory ?? undefined,
-          periodStart: snapshot.period.start,
-          periodEnd: snapshot.period.end,
+      navigation.navigate('MainTabs', {
+        screen: 'HomeTab',
+        params: {
+          filter: {
+            type: 'gasto',
+            category: rec.relatedCategory ?? undefined,
+            periodStart: snapshot.period.start,
+            periodEnd: snapshot.period.end,
+          },
         },
       });
     }

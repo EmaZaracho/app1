@@ -1,5 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
@@ -7,10 +16,12 @@ import { getOccurrenceById } from '../db/recurringExpenseOccurrencesRepository';
 import { getRuleById } from '../db/recurringExpenseRulesRepository';
 import { getFundsWithBalances } from '../db/fundsRepo';
 import { registerOccurrencePayment } from '../recurring/recurringPayment';
-import { FundSelector, type SelectableFund } from '../components/FundSelector';
-import { CATEGORY_ICON } from '../categoryVisuals';
+import { assertFundsStillActive } from '../domain/movementRules';
+import { useMovementForm } from '../hooks/useMovementForm';
+import { MovementFormFields } from '../components/MovementFormFields';
+import type { SelectableFund } from '../components/FundSelector';
 import { useTheme, type Theme } from '../theme';
-import { EXPENSE_CATEGORIES, type ExpenseCategory, type RootStackParamList } from '../types';
+import type { ExpenseCategory, RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RegisterOccurrencePayment'>;
 
@@ -22,13 +33,16 @@ export default function RegisterOccurrencePaymentScreen({ route, navigation }: P
 
   const [loaded, setLoaded] = useState(false);
   const [ruleName, setRuleName] = useState('');
-  const [amountText, setAmountText] = useState('');
-  const [category, setCategory] = useState<ExpenseCategory>('Otros');
-  const [description, setDescription] = useState('');
+  const [initialAmountText, setInitialAmountText] = useState('');
+  const [initialCategory, setInitialCategory] = useState<ExpenseCategory>('Otros');
+  const [initialDescription, setInitialDescription] = useState('');
+  const [initialFundId, setInitialFundId] = useState<number | null>(null);
   const [funds, setFunds] = useState<SelectableFund[]>([]);
-  const [fundId, setFundId] = useState<number | null>(null);
+  const [activeFundOptions, setActiveFundOptions] = useState<{ id: number; isDefault: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
     (async () => {
@@ -36,48 +50,64 @@ export default function RegisterOccurrencePaymentScreen({ route, navigation }: P
       if (!occ) return;
       const rule = await getRuleById(db, occ.ruleId);
       const active = await getFundsWithBalances(db, false);
+      if (!mountedRef.current) return;
       setFunds(active.map((f) => ({ id: f.id, name: f.name, icon: f.icon, color: f.color })));
+      setActiveFundOptions(active.map((f) => ({ id: f.id, isDefault: f.isDefault })));
       setRuleName(rule?.name ?? 'Gasto recurrente');
-      setDescription(rule?.name ?? 'Gasto recurrente');
-      setCategory(occ.category);
-      setAmountText(occ.projectedAmount != null ? String(occ.projectedAmount) : '');
-      setFundId(occ.fundAssignmentMode === 'fixed' ? occ.fundId : null);
+      setInitialDescription(rule?.name ?? 'Gasto recurrente');
+      setInitialCategory(occ.category);
+      setInitialAmountText(occ.projectedAmount != null ? String(occ.projectedAmount) : '');
+      setInitialFundId(occ.fundAssignmentMode === 'fixed' ? occ.fundId : null);
       setLoaded(true);
     })();
   }, [db, occurrenceId]);
 
-  async function handleConfirm() {
-    const amount = Number(amountText.replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError('Ingresá un monto válido mayor a 0.');
+  // Tipo fijo 'gasto': un pago de ocurrencia recurrente nunca puede convertirse
+  // en ingreso o transferencia. Nunca se pasa `defaultFundId`: con fondo fijo
+  // ya viene precompletado, y con ask_on_payment se debe elegir explícitamente.
+  const form = useMovementForm({
+    lockedType: 'gasto',
+    initialAmountText,
+    initialCategory,
+    initialDescription,
+    initialSourceFundId: initialFundId,
+    activeFunds: activeFundOptions,
+  });
+
+  const handleConfirm = useCallback(async () => {
+    if (saving || !form.canSubmit) return;
+    const result = form.buildResult(`[recurrente] ${form.description.trim()}`);
+    if (!result.movement) {
+      setError(result.error);
       return;
     }
-    if (fundId == null) {
-      setError('Elegí el fondo desde el que se pagó.');
+    const activeIds = new Set(activeFundOptions.map((f) => f.id));
+    const fundError = assertFundsStillActive([result.movement.sourceFundId], activeIds);
+    if (fundError) {
+      setError(fundError);
       return;
     }
-    if (!description.trim()) {
-      setError('Ingresá una descripción.');
-      return;
-    }
+
     setError(null);
     setSaving(true);
     try {
       await registerOccurrencePayment(db, {
         occurrenceId,
-        amount,
-        category,
-        description: description.trim(),
-        fundId,
+        amount: result.movement.amount,
+        category: result.movement.category as ExpenseCategory,
+        description: result.movement.description,
+        fundId: result.movement.sourceFundId!,
       });
+      if (!mountedRef.current) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'No se pudo registrar el pago.');
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
-  }
+  }, [saving, form, activeFundOptions, db, occurrenceId, navigation]);
 
   if (!loaded) {
     return (
@@ -88,49 +118,27 @@ export default function RegisterOccurrencePaymentScreen({ route, navigation }: P
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Registrar pago de {ruleName}</Text>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <Text style={styles.title}>Registrar pago de {ruleName}</Text>
 
-      <Text style={styles.label}>Monto real</Text>
-      <TextInput
-        style={styles.input}
-        value={amountText}
-        onChangeText={setAmountText}
-        keyboardType="decimal-pad"
-        placeholder="Monto pagado"
-        placeholderTextColor={theme.textMuted}
-      />
+        <MovementFormFields form={form} funds={funds} />
 
-      <Text style={styles.label}>Categoría</Text>
-      <View style={styles.chipsWrap}>
-        {EXPENSE_CATEGORIES.map((cat) => (
-          <Pressable
-            key={cat}
-            style={[styles.chip, category === cat && styles.chipSelected]}
-            onPress={() => setCategory(cat)}
-          >
-            <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>
-              {CATEGORY_ICON[cat]} {cat}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <FundSelector label="¿Desde qué fondo se pagó?" funds={funds} selectedId={fundId} onSelect={setFundId} required />
-
-      <Text style={styles.label}>Descripción</Text>
-      <TextInput style={styles.input} value={description} onChangeText={setDescription} />
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      <Pressable style={[styles.confirmButton, saving && styles.disabled]} onPress={handleConfirm} disabled={saving}>
-        {saving ? (
-          <ActivityIndicator color={theme.primaryText} />
-        ) : (
-          <Text style={styles.confirmText}>Registrar gasto</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+        <Pressable
+          style={[styles.confirmButton, (saving || !form.canSubmit) && styles.disabled]}
+          onPress={handleConfirm}
+          disabled={saving || !form.canSubmit}
+        >
+          {saving ? (
+            <ActivityIndicator color={theme.primaryText} />
+          ) : (
+            <Text style={styles.confirmText}>Registrar gasto</Text>
+          )}
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -140,22 +148,6 @@ function createStyles(theme: Theme) {
     loading: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg },
     container: { padding: 20, paddingBottom: 48 },
     title: { fontSize: 18, fontWeight: '800', color: theme.text },
-    label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 16, color: theme.text },
-    input: {
-      borderWidth: 1,
-      borderColor: theme.border,
-      backgroundColor: theme.surface,
-      color: theme.text,
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      fontSize: 16,
-    },
-    chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
-    chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
-    chipText: { fontSize: 13, color: theme.text },
-    chipTextSelected: { color: theme.primaryText, fontWeight: '600' },
     errorText: { color: theme.danger, marginTop: 16 },
     confirmButton: {
       backgroundColor: theme.primary,
