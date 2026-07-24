@@ -18,7 +18,7 @@ export async function parseMovement(text: string, apiKey: string): Promise<Parse
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         messages: [
           { role: 'system', content: MOVEMENT_SYSTEM_PROMPT },
           { role: 'user', content: text },
@@ -35,7 +35,16 @@ export async function parseMovement(text: string, apiKey: string): Promise<Parse
     throw new MovementParseError('API key de DeepSeek inválida. Revisala en Configuración.');
   }
   if (!response.ok) {
-    throw new MovementParseError(`Error de DeepSeek (${response.status}).`);
+    let message = `Error de DeepSeek (${response.status}).`;
+    try {
+      const errBody = await response.json();
+      if (typeof errBody?.error?.message === 'string') {
+        message = `Error de DeepSeek (${response.status}): ${errBody.error.message}`;
+      }
+    } catch {
+      // sin cuerpo interpretable, se usa el mensaje genérico
+    }
+    throw new MovementParseError(message);
   }
 
   const data = await response.json();
