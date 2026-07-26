@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   Platform,
   Pressable,
   StyleSheet,
@@ -116,6 +117,12 @@ export default function HomeScreen({ navigation, route }: Props) {
     });
   }
 
+  // Al pasar a confirmación el compositor desaparece: se cierra el teclado para
+  // que la preview quede apoyada sobre la barra de tabs, sin franja vacía.
+  useEffect(() => {
+    if (composer.preview) Keyboard.dismiss();
+  }, [composer.preview]);
+
   const displayError = composer.error ?? receiptScanner.error;
 
   return (
@@ -173,8 +180,9 @@ export default function HomeScreen({ navigation, route }: Props) {
 
       {displayError ? <Text style={styles.errorText}>{displayError}</Text> : null}
 
-      <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
-        {composer.preview ? (
+      {/* La preview es un panel inferior normal (fuera del sticky): así no queda
+          altura reservada del compositor ni una franja vacía sobre los tabs. */}
+      {composer.preview ? (
         <MovementPreview
           key={composer.preview.key}
           initialType={composer.preview.type}
@@ -190,43 +198,44 @@ export default function HomeScreen({ navigation, route }: Props) {
           onConfirm={composer.handleConfirmPreview}
         />
       ) : (
-        <View style={styles.inputRow}>
-          <TextInput
-            ref={aiInputRef}
-            style={styles.input}
-            placeholder='Ej: "pagué 20 de nafta con MP"'
-            placeholderTextColor={theme.textMuted}
-            value={composer.text}
-            onChangeText={composer.setText}
-            onSubmitEditing={composer.handleParse}
-            editable={!composer.loading}
-            returnKeyType="send"
-          />
-          <Pressable
-            style={[styles.photoButton, receiptScanner.scanning && styles.buttonDisabled]}
-            onPress={handleScanReceiptPress}
-            disabled={receiptScanner.scanning || composer.loading}
-          >
-            {receiptScanner.scanning ? (
-              <ActivityIndicator color={theme.text} />
-            ) : (
-              <Text style={styles.photoButtonText}>📷</Text>
-            )}
-          </Pressable>
-          <Pressable
-            style={[styles.addButton, composer.loading && styles.buttonDisabled]}
-            onPress={composer.handleParse}
-            disabled={composer.loading}
-          >
-            {composer.loading ? (
-              <ActivityIndicator color={theme.primaryText} />
-            ) : (
-              <Text style={styles.addButtonText}>Agregar</Text>
-            )}
-          </Pressable>
-        </View>
-        )}
-      </KeyboardStickyView>
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+          <View style={styles.inputRow}>
+            <TextInput
+              ref={aiInputRef}
+              style={styles.input}
+              placeholder='Ej: "pagué 20 de nafta con MP"'
+              placeholderTextColor={theme.textMuted}
+              value={composer.text}
+              onChangeText={composer.setText}
+              onSubmitEditing={composer.handleParse}
+              editable={!composer.loading}
+              returnKeyType="send"
+            />
+            <Pressable
+              style={[styles.photoButton, receiptScanner.scanning && styles.buttonDisabled]}
+              onPress={handleScanReceiptPress}
+              disabled={receiptScanner.scanning || composer.loading}
+            >
+              {receiptScanner.scanning ? (
+                <ActivityIndicator color={theme.text} />
+              ) : (
+                <Text style={styles.photoButtonText}>📷</Text>
+              )}
+            </Pressable>
+            <Pressable
+              style={[styles.addButton, composer.loading && styles.buttonDisabled]}
+              onPress={composer.handleParse}
+              disabled={composer.loading}
+            >
+              {composer.loading ? (
+                <ActivityIndicator color={theme.primaryText} />
+              ) : (
+                <Text style={styles.addButtonText}>Agregar</Text>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardStickyView>
+      )}
     </View>
   );
 }

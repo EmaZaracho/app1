@@ -81,44 +81,50 @@ export function MovementPreview({
   }
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.previewCard}
-      contentContainerStyle={styles.previewContent}
-      bottomOffset={24}
-      extraKeyboardSpace={24}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-      showsVerticalScrollIndicator={false}
-    >
-      <MovementFormFields form={form} funds={selectableFunds} />
+    <View style={styles.previewPanel}>
+      <KeyboardAwareScrollView
+        style={styles.previewScroll}
+        contentContainerStyle={styles.previewContent}
+        bottomOffset={24}
+        extraKeyboardSpace={24}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        showsVerticalScrollIndicator={false}
+      >
+        <MovementFormFields form={form} funds={selectableFunds} />
 
-      {negativeWarning ? <Text style={styles.warningText}>⚠️ {negativeWarning}</Text> : null}
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {negativeWarning ? <Text style={styles.warningText}>⚠️ {negativeWarning}</Text> : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <View style={styles.previewActions}>
-        <Pressable style={styles.previewCancelButton} onPress={onCancel}>
-          <Text style={styles.previewCancelText}>Cancelar</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.previewConfirmButton, !form.canSubmit && styles.buttonDisabled]}
-          onPress={handleConfirm}
-          disabled={!form.canSubmit}
-        >
-          <Text style={styles.previewConfirmText}>Confirmar</Text>
-        </Pressable>
-      </View>
-    </KeyboardAwareScrollView>
+        <View style={styles.previewActions}>
+          <Pressable style={styles.previewCancelButton} onPress={onCancel}>
+            <Text style={styles.previewCancelText}>Cancelar</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.previewConfirmButton, !form.canSubmit && styles.buttonDisabled]}
+            onPress={handleConfirm}
+            disabled={!form.canSubmit}
+          >
+            <Text style={styles.previewConfirmText}>Confirmar</Text>
+          </Pressable>
+        </View>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-    previewCard: {
+    // Panel inferior: alto = el de su contenido hasta el máximo (sin flex: 1 ni
+    // alto fijo), para no dejar espacio muerto sobre la barra de tabs.
+    previewPanel: {
+      flexShrink: 1,
       maxHeight: '70%',
       backgroundColor: theme.surface,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.border,
     },
+    previewScroll: { flexGrow: 0, flexShrink: 1 },
     previewContent: { padding: 16 },
     warningText: { color: theme.warningText, fontSize: 13, marginTop: 10 },
     errorText: { color: theme.danger, fontSize: 13, marginTop: 10 },

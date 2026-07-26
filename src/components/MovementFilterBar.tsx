@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme, type Theme } from '../theme';
 import type { Category, MovementType } from '../types';
 
@@ -52,19 +52,32 @@ export function MovementFilterBar({
         onChangeText={onSearchChange}
         returnKeyType="search"
       />
-      <View style={styles.typeFilterRow}>
+      <ScrollView
+        style={styles.typeFilterScroll}
+        contentContainerStyle={styles.typeFilterRow}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+      >
         {TYPE_OPTIONS.map((opt) => (
           <Pressable
             key={opt.label}
             style={[styles.typeChip, filterType === opt.value && styles.typeChipSelected]}
             onPress={() => onFilterTypeChange(opt.value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filterType === opt.value }}
+            accessibilityLabel={`Filtrar por ${opt.label}`}
           >
-            <Text style={[styles.typeChipText, filterType === opt.value && styles.typeChipTextSelected]}>
+            <Text
+              numberOfLines={1}
+              style={[styles.typeChipText, filterType === opt.value && styles.typeChipTextSelected]}
+            >
               {opt.label}
             </Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
       {hasAdvancedFilter ? (
         <Pressable style={styles.advancedFilterChip} onPress={onClearAdvanced}>
           <Text style={styles.advancedFilterText}>
@@ -96,7 +109,10 @@ function createStyles(theme: Theme) {
       fontSize: 14,
       marginBottom: 10,
     },
-    typeFilterRow: { flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: 'wrap' },
+    // Fila única desplazable: sin flexWrap, para que "Ajustes" nunca baje a una
+    // segunda línea y la lista conserve el alto vertical.
+    typeFilterScroll: { flexGrow: 0, marginBottom: 10 },
+    typeFilterRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingRight: 4 },
     advancedFilterChip: {
       backgroundColor: theme.surfaceAlt,
       borderRadius: 10,
@@ -110,7 +126,8 @@ function createStyles(theme: Theme) {
       borderColor: theme.border,
       borderRadius: 16,
       paddingHorizontal: 12,
-      paddingVertical: 6,
+      paddingVertical: 8,
+      flexShrink: 0,
     },
     typeChipSelected: { backgroundColor: theme.chipSelectedBg, borderColor: theme.chipSelectedBg },
     typeChipText: { fontSize: 13, color: theme.text, fontWeight: '600' },
