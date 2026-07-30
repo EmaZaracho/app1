@@ -15,6 +15,7 @@ import {
 import { formatCurrency } from '../utils/format';
 import { iconForCategory, colorForCategory } from '../categoryVisuals';
 import { useTheme, type Theme } from '../theme';
+import { getTrackingStart } from '../db/financialPreferencesRepository';
 
 const CHART_HEIGHT = 120;
 const DONUT_RADIUS = 58;
@@ -87,9 +88,12 @@ export default function SummaryScreen() {
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([]);
 
   const load = useCallback(async () => {
+    const trackingStart = await getTrackingStart(db);
     const [categoryTotals, monthlyTrend] = await Promise.all([
-      range === 'month' ? getCurrentMonthExpenseCategoryTotals(db) : getExpenseCategoryTotals(db),
-      getMonthlyTrend(db, 6),
+      range === 'month'
+        ? getCurrentMonthExpenseCategoryTotals(db, trackingStart)
+        : getExpenseCategoryTotals(db, trackingStart),
+      getMonthlyTrend(db, 6, trackingStart),
     ]);
     setTotals(categoryTotals);
     setTrend(monthlyTrend);

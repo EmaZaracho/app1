@@ -2,7 +2,7 @@ import { archiveFund, createFund, getFunds } from '../src/db/fundsRepo';
 import { addMovement } from '../src/db/movementsRepo';
 import { setBudget } from '../src/db/budgetsRepo';
 import { setCategoryPriority, getCategoryPriorities } from '../src/db/categoryFinancialSettingsRepository';
-import { setSavingsGoal } from '../src/db/financialPreferencesRepository';
+import { setSavingsGoal, setTrackingStart } from '../src/db/financialPreferencesRepository';
 import { buildFinancialSnapshot } from '../src/analytics/financialSnapshot';
 import { freshDb } from './helpers';
 
@@ -146,5 +146,22 @@ describe('FinancialSnapshot (integración)', () => {
       now: NOW,
     });
     expect(snapshot.period.days).toBe(10);
+  });
+
+  it('la línea base excluye movimientos anteriores del análisis sin alterar los posteriores', async () => {
+    const db = await freshDb();
+    const efectivo = (await getFunds(db, false))[0].id;
+    await ingreso(db, efectivo, 100000, new Date(2026, 6, 2));
+    await gasto(db, efectivo, 60000, 'Comida', new Date(2026, 6, 3));
+    await ingreso(db, efectivo, 50000, new Date(2026, 6, 12));
+    await gasto(db, efectivo, 10000, 'Comida', new Date(2026, 6, 13));
+    await setTrackingStart(db, new Date(2026, 6, 10).toISOString());
+
+    const snapshot = await buildFinancialSnapshot(db, { preset: 'current_month', now: NOW });
+
+    expect(snapshot.period.start).toBe(new Date(2026, 6, 10).toISOString());
+    expect(snapshot.period.days).toBe(22);
+    expect(snapshot.totals.income).toBe(50000);
+    expect(snapshot.totals.expense).toBe(10000);
   });
 });

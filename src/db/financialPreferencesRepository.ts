@@ -9,6 +9,7 @@ interface Row {
   savings_goal_enabled: number;
   savings_goal_mode: string | null;
   savings_goal_value: number | null;
+  tracking_start_at: string | null;
   updated_at: string;
 }
 
@@ -20,6 +21,32 @@ export async function getSavingsGoal(db: SqlDatabase): Promise<SavingsGoal> {
     mode: (row.savings_goal_mode as SavingsGoalMode) ?? 'fixed_amount',
     targetValue: row.savings_goal_value ?? 0,
   };
+}
+
+/** Fecha inclusiva desde la que se calculan las métricas, o null para usar todo el historial. */
+export async function getTrackingStart(db: SqlDatabase): Promise<string | null> {
+  const row = await db.getFirstAsync<Pick<Row, 'tracking_start_at'>>(
+    'SELECT tracking_start_at FROM financial_preferences WHERE id = 1'
+  );
+  return row?.tracking_start_at ?? null;
+}
+
+/**
+ * Define una línea base analítica. No modifica movimientos ni saldos: solo
+ * limita desde qué instante se agregan ingresos y gastos en las métricas.
+ */
+export async function setTrackingStart(db: SqlDatabase, startsAt: string | null): Promise<void> {
+  if (startsAt != null && Number.isNaN(new Date(startsAt).getTime())) {
+    throw new Error('La fecha de inicio del seguimiento no es válida.');
+  }
+  await db.runAsync(
+    `INSERT INTO financial_preferences (id, tracking_start_at, updated_at)
+     VALUES (1, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       tracking_start_at = excluded.tracking_start_at,
+       updated_at = excluded.updated_at`,
+    [startsAt, new Date().toISOString()]
+  );
 }
 
 /** Guarda la meta de ahorro (solo puede haber una modalidad activa a la vez). Valida si está habilitada. */

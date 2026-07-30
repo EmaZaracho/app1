@@ -36,10 +36,13 @@ export async function setBudget(
  * Presupuestos superados este mes. Solo considera gastos reales (type = 'gasto');
  * transferencias y ajustes nunca disparan alertas de presupuesto.
  */
-export async function getBudgetAlerts(db: SqlDatabase): Promise<BudgetAlert[]> {
+export async function getBudgetAlerts(
+  db: SqlDatabase,
+  trackingStart: string | null = null
+): Promise<BudgetAlert[]> {
   const [budgets, totals] = await Promise.all([
     getBudgets(db),
-    getCurrentMonthExpenseCategoryTotals(db),
+    getCurrentMonthExpenseCategoryTotals(db, trackingStart),
   ]);
   const spentByCategory = new Map(totals.map((t) => [t.category, t.total]));
   return budgets

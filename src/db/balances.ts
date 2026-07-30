@@ -64,13 +64,16 @@ export async function getTotalBalance(db: SqlDatabase): Promise<number> {
 
 /** Ingresos y gastos globales reales (excluye transferencias y ajustes). */
 export async function getGlobalIncomeExpense(
-  db: SqlDatabase
+  db: SqlDatabase,
+  trackingStart: string | null = null
 ): Promise<{ income: number; expense: number }> {
   const row = await db.getFirstAsync<{ income: number; expense: number }>(
     `SELECT
        COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE 0 END), 0) AS income,
        COALESCE(SUM(CASE WHEN type = 'gasto' THEN amount ELSE 0 END), 0) AS expense
-     FROM movements`
+     FROM movements
+     WHERE ? IS NULL OR created_at >= ?`,
+    [trackingStart, trackingStart]
   );
   return { income: row?.income ?? 0, expense: row?.expense ?? 0 };
 }
@@ -78,20 +81,25 @@ export async function getGlobalIncomeExpense(
 /** Ingresos y gastos reales de un fondo (excluye transferencias y ajustes). */
 export async function getFundIncomeExpense(
   db: SqlDatabase,
-  fundId: number
+  fundId: number,
+  trackingStart: string | null = null
 ): Promise<{ income: number; expense: number }> {
   const row = await db.getFirstAsync<{ income: number; expense: number }>(
     `SELECT
        COALESCE(SUM(CASE WHEN type = 'ingreso' AND destination_fund_id = ? THEN amount ELSE 0 END), 0) AS income,
        COALESCE(SUM(CASE WHEN type = 'gasto' AND source_fund_id = ? THEN amount ELSE 0 END), 0) AS expense
-     FROM movements`,
-    [fundId, fundId]
+     FROM movements
+     WHERE ? IS NULL OR created_at >= ?`,
+    [fundId, fundId, trackingStart, trackingStart]
   );
   return { income: row?.income ?? 0, expense: row?.expense ?? 0 };
 }
 
 /** Variación mensual del Total: ingresos, gastos y ajustes; transferencias se cancelan. */
-export async function getTotalMonthlyVariation(db: SqlDatabase): Promise<number> {
+export async function getTotalMonthlyVariation(
+  db: SqlDatabase,
+  trackingStart: string | null = null
+): Promise<number> {
   const { start, end } = currentMonthRange();
   const row = await db.getFirstAsync<{ variation: number }>(
     `SELECT
@@ -100,42 +108,52 @@ export async function getTotalMonthlyVariation(db: SqlDatabase): Promise<number>
        + COALESCE(SUM(CASE WHEN type = 'ajuste' AND destination_fund_id IS NOT NULL THEN amount ELSE 0 END), 0)
        - COALESCE(SUM(CASE WHEN type = 'ajuste' AND source_fund_id IS NOT NULL THEN amount ELSE 0 END), 0)
        AS variation
-     FROM movements WHERE created_at >= ? AND created_at < ?`,
-    [start, end]
+     FROM movements WHERE created_at >= ? AND created_at < ?
+       AND (? IS NULL OR created_at >= ?)`,
+    [start, end, trackingStart, trackingStart]
   );
   return row?.variation ?? 0;
 }
 
 /** Variación mensual de un fondo: todos los cambios de saldo del mes (incluye transferencias y ajustes). */
-export async function getFundMonthlyVariation(db: SqlDatabase, fundId: number): Promise<number> {
+export async function getFundMonthlyVariation(
+  db: SqlDatabase,
+  fundId: number,
+  trackingStart: string | null = null
+): Promise<number> {
   const { start, end } = currentMonthRange();
   const row = await db.getFirstAsync<{ variation: number }>(
     `SELECT
        COALESCE(SUM(CASE WHEN destination_fund_id = ? THEN amount ELSE 0 END), 0)
        - COALESCE(SUM(CASE WHEN source_fund_id = ? THEN amount ELSE 0 END), 0)
        AS variation
-     FROM movements WHERE created_at >= ? AND created_at < ?`,
-    [fundId, fundId, start, end]
+     FROM movements WHERE created_at >= ? AND created_at < ?
+       AND (? IS NULL OR created_at >= ?)`,
+    [fundId, fundId, start, end, trackingStart, trackingStart]
   );
   return row?.variation ?? 0;
 }
 
 /** Estadísticas de la vista Total (sintética). */
-export async function getTotalStats(db: SqlDatabase): Promise<SlideStats> {
+export async function getTotalStats(db: SqlDatabase, trackingStart: string | null = null): Promise<SlideStats> {
   const [balance, incExp, monthlyVariation] = await Promise.all([
     getTotalBalance(db),
-    getGlobalIncomeExpense(db),
-    getTotalMonthlyVariation(db),
+    getGlobalIncomeExpense(db, trackingStart),
+    getTotalMonthlyVariation(db, trackingStart),
   ]);
   return { balance, income: incExp.income, expense: incExp.expense, monthlyVariation };
 }
 
 /** Estadísticas de un fondo puntual. */
-export async function getFundStats(db: SqlDatabase, fundId: number): Promise<SlideStats> {
+export async function getFundStats(
+  db: SqlDatabase,
+  fundId: number,
+  trackingStart: string | null = null
+): Promise<SlideStats> {
   const [balance, incExp, monthlyVariation] = await Promise.all([
     getFundBalance(db, fundId),
-    getFundIncomeExpense(db, fundId),
-    getFundMonthlyVariation(db, fundId),
+    getFundIncomeExpense(db, fundId, trackingStart),
+    getFundMonthlyVariation(db, fundId, trackingStart),
   ]);
   return { balance, income: incExp.income, expense: incExp.expense, monthlyVariation };
 }

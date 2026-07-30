@@ -5,6 +5,7 @@ import {
   getExpenseCategoryTotals,
   getMonthlyTrend,
 } from '../src/db/summaryRepo';
+import { getTotalStats } from '../src/db/balances';
 import { freshDb } from './helpers';
 
 describe('consultas globales (resúmenes y presupuestos)', () => {
@@ -37,6 +38,23 @@ describe('consultas globales (resúmenes y presupuestos)', () => {
     expect(alerts).toHaveLength(0);
   });
 
+  it('la línea base excluye gastos anteriores de las alertas de presupuesto', async () => {
+    const db = await freshDb();
+    const efectivo = (await getFunds(db, false))[0].id;
+    await setBudget(db, 'Comida', 50);
+    const priorExpense = await addMovement(db, {
+      type: 'gasto', amount: 100, category: 'Comida', description: 'previo', rawText: 'x', sourceFundId: efectivo, destinationFundId: null,
+    });
+    const trackedExpense = await addMovement(db, {
+      type: 'gasto', amount: 40, category: 'Comida', description: 'nuevo', rawText: 'x', sourceFundId: efectivo, destinationFundId: null,
+    });
+    const baseline = new Date(2026, 6, 10).toISOString();
+    await db.runAsync('UPDATE movements SET created_at = ? WHERE id = ?', [new Date(2026, 6, 2).toISOString(), priorExpense.id]);
+    await db.runAsync('UPDATE movements SET created_at = ? WHERE id = ?', [new Date(2026, 6, 12).toISOString(), trackedExpense.id]);
+
+    expect(await getBudgetAlerts(db, baseline)).toHaveLength(0);
+  });
+
   it('las tendencias no tratan transferencias como gastos', async () => {
     const db = await freshDb();
     const efectivo = (await getFunds(db, false))[0].id;
@@ -48,5 +66,26 @@ describe('consultas globales (resúmenes y presupuestos)', () => {
     const current = trend[trend.length - 1];
     expect(current.income).toBe(1000);
     expect(current.expense).toBe(0); // la transferencia no es gasto
+  });
+
+  it('la línea base limita resúmenes y estadísticas de flujo, pero no el saldo', async () => {
+    const db = await freshDb();
+    const efectivo = (await getFunds(db, false))[0].id;
+    const oldIncome = await addMovement(db, {
+      type: 'ingreso', amount: 1000, category: 'Sueldo', description: 'ingreso previo', rawText: 'x', sourceFundId: null, destinationFundId: efectivo,
+    });
+    const newExpense = await addMovement(db, {
+      type: 'gasto', amount: 200, category: 'Comida', description: 'gasto nuevo', rawText: 'x', sourceFundId: efectivo, destinationFundId: null,
+    });
+    const baseline = new Date(2026, 6, 10).toISOString();
+    await db.runAsync('UPDATE movements SET created_at = ? WHERE id = ?', [new Date(2026, 6, 2).toISOString(), oldIncome.id]);
+    await db.runAsync('UPDATE movements SET created_at = ? WHERE id = ?', [new Date(2026, 6, 12).toISOString(), newExpense.id]);
+
+    expect(await getExpenseCategoryTotals(db, baseline)).toEqual([{ category: 'Comida', total: 200 }]);
+    const stats = await getTotalStats(db, baseline);
+    expect(stats.balance).toBe(800);
+    expect(stats.income).toBe(0);
+    expect(stats.expense).toBe(200);
+    expect(stats.monthlyVariation).toBe(-200);
   });
 });

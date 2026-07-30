@@ -2,7 +2,7 @@ import { normalizeName } from '../domain/normalize';
 import { DEFAULT_FUND_COLOR, DEFAULT_FUND_ICON } from '../fundVisuals';
 import type { SqlDatabase } from './sqlDatabase';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const DEFAULT_FUND_NAME = 'Efectivo';
 
 const CREATE_FUNDS = `
@@ -180,6 +180,11 @@ async function tableExists(db: SqlDatabase, name: string): Promise<boolean> {
   return !!row;
 }
 
+async function columnExists(db: SqlDatabase, table: string, column: string): Promise<boolean> {
+  const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+  return rows.some((row) => row.name === column);
+}
+
 /**
  * Garantiza que exista al menos un fondo activo y exactamente un predeterminado.
  * Crea "Efectivo" si no hay ninguno. Devuelve el id del fondo predeterminado.
@@ -317,6 +322,10 @@ export async function initDatabase(db: SqlDatabase): Promise<void> {
     await db.execAsync(CREATE_CATEGORY_FINANCIAL_SETTINGS);
     await db.execAsync(CREATE_FINANCIAL_ADVICE_CACHE);
     await db.execAsync(CREATE_RECURRING_RULES);
+
+    if (userVersion < 5 && !(await columnExists(db, 'financial_preferences', 'tracking_start_at'))) {
+      await db.execAsync('ALTER TABLE financial_preferences ADD COLUMN tracking_start_at TEXT;');
+    }
 
     if (userVersion < 4 && (await tableExists(db, 'recurring_expense_occurrences'))) {
       await migrateOccurrencesAllowDeletedStatus(db);

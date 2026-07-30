@@ -64,10 +64,10 @@ describe('migración recurring_expense_occurrences v3 -> v4 (status deleted)', (
     );
 
     // Reejecuta initDatabase como hace la app en cada arranque: debe migrar
-    // de user_version 3 a 4 sin perder datos.
+    // de user_version 3 al esquema vigente sin perder datos.
     await initDatabase(db);
     const versionRow = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-    expect(versionRow?.user_version).toBe(4);
+    expect(versionRow?.user_version).toBe(5);
 
     const augAfter = await getOccurrenceById(db, augOcc.id);
     expect(augAfter?.storedStatus).toBe('paid');

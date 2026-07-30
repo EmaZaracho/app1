@@ -7,7 +7,7 @@ import type {
 import { average, percentChange, round2, safeDivide } from '../domain/money';
 import { getBudgets } from '../db/budgetsRepo';
 import { getCategoryPriorities } from '../db/categoryFinancialSettingsRepository';
-import { getSavingsGoal } from '../db/financialPreferencesRepository';
+import { getSavingsGoal, getTrackingStart } from '../db/financialPreferencesRepository';
 import type { SqlDatabase } from '../db/sqlDatabase';
 import { resolvePeriod, type CustomRangeInput } from './periodRanges';
 import { previousEquivalentRange, previousThreeEquivalentRanges } from './periodComparison';
@@ -33,6 +33,15 @@ export interface BuildSnapshotOptions {
   now?: Date;
 }
 
+/** Recorta un rango a la línea base sin alterar los límites originales fuera de ella. */
+function applyTrackingStart<T extends { start: string; end: string }>(
+  period: T,
+  trackingStart: string | null
+): T {
+  if (!trackingStart || trackingStart <= period.start) return period;
+  return { ...period, start: trackingStart >= period.end ? period.end : trackingStart };
+}
+
 /**
  * Orquesta el cálculo completo de un FinancialSnapshot: resuelve el período,
  * consulta métricas locales (actual, período anterior equivalente, promedio
@@ -45,9 +54,17 @@ export async function buildFinancialSnapshot(
   options: BuildSnapshotOptions
 ): Promise<FinancialSnapshot> {
   const now = options.now ?? new Date();
-  const period = resolvePeriod(options.preset, now, options.custom);
-  const previousRange = previousEquivalentRange(period);
-  const avgRanges = previousThreeEquivalentRanges(period);
+  const requestedPeriod = resolvePeriod(options.preset, now, options.custom);
+  const trackingStart = await getTrackingStart(db);
+  const trackedPeriod = applyTrackingStart(requestedPeriod, trackingStart);
+  const period = {
+    ...trackedPeriod,
+    days: Math.round((new Date(trackedPeriod.end).getTime() - new Date(trackedPeriod.start).getTime()) / 86400000),
+  };
+  const previousRange = applyTrackingStart(previousEquivalentRange(requestedPeriod), trackingStart);
+  const avgRanges = previousThreeEquivalentRanges(requestedPeriod).map((range) =>
+    applyTrackingStart(range, trackingStart)
+  );
   const isCurrentMonth = period.preset === 'current_month';
 
   const [

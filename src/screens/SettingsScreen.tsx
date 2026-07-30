@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Application from 'expo-application';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -12,6 +12,8 @@ import {
   setSelectedProvider,
 } from '../services/apiKey';
 import { formatVersionInfo } from '../services/appVersion';
+import { useDb } from '../db/useDb';
+import { getTrackingStart, setTrackingStart } from '../db/financialPreferencesRepository';
 import { useTheme, type Theme } from '../theme';
 import { AI_PROVIDERS, type AIProvider, type MainTabParamList, type RootStackParamList } from '../types';
 
@@ -23,9 +25,11 @@ type Props = CompositeScreenProps<
 export default function SettingsScreen({ navigation }: Props) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const db = useDb();
   const [provider, setProvider] = useState<AIProvider>('deepseek');
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
+  const [trackingStart, setTrackingStartState] = useState<string | null>(null);
 
   useEffect(() => {
     getSelectedProvider().then(setProvider);
@@ -34,6 +38,10 @@ export default function SettingsScreen({ navigation }: Props) {
   useEffect(() => {
     getApiKey(provider).then((stored) => setKey(stored ?? ''));
   }, [provider]);
+
+  useEffect(() => {
+    getTrackingStart(db).then(setTrackingStartState);
+  }, [db]);
 
   const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)!;
   const versionInfo = useMemo(
@@ -75,8 +83,44 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   }
 
+  function handleStartTrackingNow() {
+    Alert.alert(
+      'Empezar seguimiento desde ahora',
+      'Tus movimientos y saldos no cambiarán. A partir de ahora, ingresos, gastos, tendencias y análisis dejarán fuera el historial anterior. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Continuar',
+          onPress: async () => {
+            const start = new Date().toISOString();
+            await setTrackingStart(db, start);
+            setTrackingStartState(start);
+          },
+        },
+      ]
+    );
+  }
+
+  function handleClearTrackingStart() {
+    Alert.alert(
+      'Quitar línea base',
+      'Las métricas volverán a considerar todo el historial. Los movimientos y saldos no cambiarán.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Quitar',
+          style: 'destructive',
+          onPress: async () => {
+            await setTrackingStart(db, null);
+            setTrackingStartState(null);
+          },
+        },
+      ]
+    );
+  }
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Pressable style={styles.fundsButton} onPress={() => navigation.navigate('Funds')}>
         <Text style={styles.fundsButtonText}>💵 Administrar fondos</Text>
         <Text style={styles.fundsButtonChevron}>›</Text>
@@ -86,6 +130,31 @@ export default function SettingsScreen({ navigation }: Props) {
         <Text style={styles.fundsButtonText}>🏷️ Prioridad de categorías</Text>
         <Text style={styles.fundsButtonChevron}>›</Text>
       </Pressable>
+
+      <Pressable style={styles.fundsButton} onPress={() => navigation.navigate('Budgets')}>
+        <Text style={styles.fundsButtonText}>💰 Administrar presupuestos</Text>
+        <Text style={styles.fundsButtonChevron}>›</Text>
+      </Pressable>
+
+      <View style={styles.trackingSection}>
+        <Text style={styles.label}>Historial financiero</Text>
+        <Text style={styles.hint}>
+          {trackingStart
+            ? `Las métricas usan movimientos desde ${new Date(trackingStart).toLocaleString('es-AR', {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              })}.`
+            : 'Las métricas usan todo el historial registrado.'}
+        </Text>
+        <Pressable style={styles.trackingButton} onPress={handleStartTrackingNow}>
+          <Text style={styles.trackingButtonText}>Empezar seguimiento desde ahora</Text>
+        </Pressable>
+        {trackingStart ? (
+          <Pressable style={styles.clearTrackingButton} onPress={handleClearTrackingStart}>
+            <Text style={styles.clearButtonText}>Quitar línea base</Text>
+          </Pressable>
+        ) : null}
+      </View>
 
       <Text style={styles.label}>Proveedor de IA</Text>
       <View style={styles.providerRow}>
@@ -139,13 +208,14 @@ export default function SettingsScreen({ navigation }: Props) {
         <Text style={styles.versionText}>GestorIA {versionInfo.version}</Text>
         <Text style={styles.versionText}>Compilación {versionInfo.build}</Text>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: theme.bg },
+    container: { flex: 1, backgroundColor: theme.bg },
+    content: { padding: 20 },
     fundsButton: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -160,6 +230,17 @@ function createStyles(theme: Theme) {
     },
     fundsButtonText: { fontSize: 15, fontWeight: '600', color: theme.text },
     fundsButtonChevron: { fontSize: 22, color: theme.textMuted },
+    trackingSection: { marginBottom: 24 },
+    trackingButton: {
+      borderWidth: 1,
+      borderColor: theme.primary,
+      borderRadius: 10,
+      paddingVertical: 11,
+      alignItems: 'center',
+      marginTop: 14,
+    },
+    trackingButtonText: { color: theme.primary, fontWeight: '700', fontSize: 14 },
+    clearTrackingButton: { paddingVertical: 10, alignItems: 'center', marginTop: 4 },
     label: { fontSize: 14, fontWeight: '600', marginBottom: 8, color: theme.text },
     keyLabel: { marginTop: 24 },
     providerRow: { flexDirection: 'row', gap: 8 },

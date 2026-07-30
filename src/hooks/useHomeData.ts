@@ -11,6 +11,7 @@ import {
   getTotalStats,
   type BudgetAlert,
 } from '../db/database';
+import { getTrackingStart } from '../db/financialPreferencesRepository';
 import type { CarouselSlide } from '../components/FundCarousel';
 import type { SqlDatabase } from '../db/sqlDatabase';
 import type { Fund, FundWithBalance, Movement } from '../types';
@@ -43,9 +44,9 @@ export function useHomeData(db: SqlDatabase): UseHomeDataResult {
   const [initialLoading, setInitialLoading] = useState(true);
 
   const buildSlides = useCallback(
-    async (activeFunds: FundWithBalance[]): Promise<CarouselSlide[]> => {
-      const totalStats = await getTotalStats(db);
-      const fundStats = await Promise.all(activeFunds.map((f) => getFundStats(db, f.id)));
+    async (activeFunds: FundWithBalance[], trackingStart: string | null): Promise<CarouselSlide[]> => {
+      const totalStats = await getTotalStats(db, trackingStart);
+      const fundStats = await Promise.all(activeFunds.map((f) => getFundStats(db, f.id, trackingStart)));
       const fundSlides: CarouselSlide[] = activeFunds.map((fund, i) => ({
         kind: 'fund',
         fund,
@@ -68,12 +69,15 @@ export function useHomeData(db: SqlDatabase): UseHomeDataResult {
   );
 
   const reload = useCallback(async () => {
-    const [activeFunds, everyFund, alerts] = await Promise.all([
+    const [activeFunds, everyFund, trackingStart] = await Promise.all([
       getFundsWithBalances(db, false),
       getFunds(db, true),
-      getBudgetAlerts(db),
+      getTrackingStart(db),
     ]);
-    const nextSlides = await buildSlides(activeFunds);
+    const [alerts, nextSlides] = await Promise.all([
+      getBudgetAlerts(db, trackingStart),
+      buildSlides(activeFunds, trackingStart),
+    ]);
     setFunds(activeFunds);
     setAllFunds(everyFund);
     setSlides(nextSlides);
