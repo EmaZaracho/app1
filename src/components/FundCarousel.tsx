@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -13,6 +13,7 @@ import { formatCurrency } from '../utils/format';
 import { useTheme, type Theme } from '../theme';
 import type { SlideStats } from '../db/balances';
 import type { FundWithBalance } from '../types';
+import { getBalanceVisibility, setBalanceVisibility } from '../services/balanceVisibility';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_MARGIN = 16;
@@ -35,6 +36,37 @@ export function FundCarousel({ slides, activeIndex, onIndexChange, onAddFund }: 
   const listRef = useRef<FlatList<CarouselSlide>>(null);
   const cardWidth = SCREEN_WIDTH - CARD_MARGIN * 2;
   const snap = cardWidth + CARD_MARGIN;
+
+  const [balanceVisible, setBalanceVisible] = useState<boolean | null>(null);
+  const userToggledRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getBalanceVisibility()
+      .then((value) => {
+        if (!cancelled && !userToggledRef.current) {
+          setBalanceVisible(value);
+        }
+      })
+      .catch(() => {
+        // fail-closed: keep null (masked) on read error
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleVisibility = useCallback(async () => {
+    userToggledRef.current = true;
+    const next = !balanceVisible;
+    setBalanceVisible(next);
+    try {
+      await setBalanceVisibility(next);
+    } catch {
+      // fail-closed: mask amounts if persistence fails
+      setBalanceVisible(false);
+    }
+  }, [balanceVisible]);
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -60,7 +92,13 @@ export function FundCarousel({ slides, activeIndex, onIndexChange, onAddFund }: 
         onMomentumScrollEnd={handleScroll}
         renderItem={({ item }) => (
           <View style={[styles.card, { width: cardWidth }]}>
-            <SlideContent slide={item} styles={styles} theme={theme} />
+            <SlideContent
+              slide={item}
+              styles={styles}
+              theme={theme}
+              balanceVisible={balanceVisible}
+              onToggleVisibility={toggleVisibility}
+            />
           </View>
         )}
         ListFooterComponent={
@@ -86,16 +124,23 @@ function SlideContent({
   slide,
   styles,
   theme,
+  balanceVisible,
+  onToggleVisibility,
 }: {
   slide: CarouselSlide;
   styles: ReturnType<typeof createStyles>;
   theme: Theme;
+  balanceVisible: boolean | null;
+  onToggleVisibility: () => void;
 }) {
   const isTotal = slide.kind === 'total';
   const title = isTotal ? 'Total' : slide.fund.name;
   const icon = isTotal ? '📊' : slide.fund.icon;
   const stats = slide.stats;
   const negative = stats.balance < 0;
+  const masked = balanceVisible === null || balanceVisible === false;
+
+  const fmt = (amount: number) => (masked ? '***' : formatCurrency(amount));
 
   return (
     <>
@@ -107,20 +152,31 @@ function SlideContent({
           <Text style={styles.defaultTag}>Predeterminado</Text>
         ) : null}
       </View>
-      <Text style={[styles.balance, negative && { color: theme.danger }]}>
-        {formatCurrency(stats.balance)}
-      </Text>
+      <View style={styles.balanceRow}>
+        <Text style={[styles.balance, negative && !masked && { color: theme.danger }]}>
+          {fmt(stats.balance)}
+        </Text>
+        <Pressable
+          onPress={onToggleVisibility}
+          accessibilityRole="button"
+          accessibilityLabel={balanceVisible ? 'Ocultar saldo' : 'Mostrar saldo'}
+          accessibilityHint="Afecta todos los montos monetarios de este carrusel"
+          style={styles.eyeButton}
+        >
+          <Text style={styles.eyeIcon}>{balanceVisible ? '👁' : '🙈'}</Text>
+        </Pressable>
+      </View>
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Ingresos</Text>
-          <Text style={[styles.statValue, { color: theme.success }]}>
-            {formatCurrency(stats.income)}
+          <Text style={[styles.statValue, !masked && { color: theme.success }]}>
+            {fmt(stats.income)}
           </Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Gastos</Text>
-          <Text style={[styles.statValue, { color: theme.danger }]}>
-            {formatCurrency(stats.expense)}
+          <Text style={[styles.statValue, !masked && { color: theme.danger }]}>
+            {fmt(stats.expense)}
           </Text>
         </View>
         <View style={styles.statItem}>
@@ -128,10 +184,10 @@ function SlideContent({
           <Text
             style={[
               styles.statValue,
-              { color: stats.monthlyVariation < 0 ? theme.danger : theme.success },
+              !masked && { color: stats.monthlyVariation < 0 ? theme.danger : theme.success },
             ]}
           >
-            {formatCurrency(stats.monthlyVariation)}
+            {fmt(stats.monthlyVariation)}
           </Text>
         </View>
       </View>
@@ -161,11 +217,14 @@ function createStyles(theme: Theme) {
       fontWeight: '700',
       textTransform: 'uppercase',
     },
-    balance: { fontSize: 30, fontWeight: '800', color: theme.text, marginTop: 8 },
+    balanceRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
+    balance: { fontSize: 30, fontWeight: '800', color: theme.text },
+    eyeButton: { padding: 4 },
+    eyeIcon: { fontSize: 20 },
     statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
     statItem: { flex: 1 },
     statLabel: { fontSize: 11, color: theme.textMuted },
-    statValue: { fontSize: 14, fontWeight: '700', marginTop: 2 },
+    statValue: { fontSize: 14, fontWeight: '700', marginTop: 2, color: theme.text },
     addCard: {
       width: 120,
       marginRight: CARD_MARGIN,
