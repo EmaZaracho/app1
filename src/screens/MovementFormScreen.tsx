@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { FormScrollView } from '../components/FormScrollView';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
@@ -110,15 +109,7 @@ export default function MovementFormScreen({ route, navigation }: Props) {
   }
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.flex}
-      contentContainerStyle={styles.container}
-      bottomOffset={24}
-      extraKeyboardSpace={24}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-      showsVerticalScrollIndicator={false}
-    >
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <MovementFormFields form={form} funds={funds} />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -130,7 +121,7 @@ export default function MovementFormScreen({ route, navigation }: Props) {
         >
           {saving ? <ActivityIndicator color={theme.primaryText} /> : <Text style={styles.submitText}>Guardar</Text>}
         </Pressable>
-    </KeyboardAwareScrollView>
+    </FormScrollView>
   );
 }
 

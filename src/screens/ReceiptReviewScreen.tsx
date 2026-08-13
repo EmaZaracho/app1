@@ -2,15 +2,13 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '../components/FormScrollView';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
@@ -163,8 +161,7 @@ export default function ReceiptReviewScreen({ route, navigation }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.container}>
         <Text style={styles.label}>Comercio (opcional)</Text>
         <TextInput
           style={styles.merchantInput}
@@ -227,8 +224,7 @@ export default function ReceiptReviewScreen({ route, navigation }: Props) {
             )}
           </Pressable>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </FormScrollView>
   );
 }
 

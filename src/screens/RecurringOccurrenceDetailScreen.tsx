@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FormScrollView } from '../components/FormScrollView';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
@@ -81,7 +82,7 @@ export default function RecurringOccurrenceDetailScreen({ route, navigation }: P
   const diff = realAmount != null && occ.projectedAmount != null ? realAmount - occ.projectedAmount : null;
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{ruleName}</Text>
         <OccurrenceStatusBadge status={occ.effectiveStatus} />
@@ -206,7 +207,7 @@ export default function RecurringOccurrenceDetailScreen({ route, navigation }: P
           <Text style={styles.deleteText}>Eliminar ocurrencia</Text>
         </Pressable>
       ) : null}
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

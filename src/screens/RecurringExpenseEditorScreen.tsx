@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -10,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { FormScrollView } from '../components/FormScrollView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
 import { getRuleById, insertRule } from '../db/recurringExpenseRulesRepository';
@@ -153,15 +152,7 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
   }
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.flex}
-      contentContainerStyle={styles.container}
-      bottomOffset={24}
-      extraKeyboardSpace={24}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-      showsVerticalScrollIndicator={false}
-    >
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.container}>
       {!isEdit ? (
           <View style={styles.aiBox}>
             <Text style={styles.aiTitle}>Crear con DeepSeek</Text>
@@ -203,7 +194,7 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
         onSubmit={handleSubmit}
         saving={saving}
       />
-    </KeyboardAwareScrollView>
+    </FormScrollView>
   );
 }
 

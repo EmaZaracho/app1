@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { FormScrollView } from '../components/FormScrollView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
 import type { SqlDatabase } from '../db/sqlDatabase';
@@ -181,15 +180,7 @@ function PaymentForm({ data, db, navigation, occurrenceId }: PaymentFormProps) {
   }, [saving, form, data.activeFundOptions, db, occurrenceId, navigation]);
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.flex}
-      contentContainerStyle={styles.container}
-      bottomOffset={24}
-      extraKeyboardSpace={24}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-      showsVerticalScrollIndicator={false}
-    >
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.title}>Registrar pago de {data.ruleName}</Text>
 
       <MovementFormFields form={form} funds={data.funds} />
@@ -207,7 +198,7 @@ function PaymentForm({ data, db, navigation, occurrenceId }: PaymentFormProps) {
           <Text style={styles.confirmText}>Registrar gasto</Text>
         )}
       </Pressable>
-    </KeyboardAwareScrollView>
+    </FormScrollView>
   );
 }
 

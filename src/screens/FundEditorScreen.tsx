@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Platform,
   Pressable,
   StyleSheet,
   Switch,
@@ -10,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { FormScrollView } from '../components/FormScrollView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   adjustFundBalance,
@@ -135,15 +134,7 @@ export default function FundEditorScreen({ route, navigation }: Props) {
   }
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.flex}
-      contentContainerStyle={styles.container}
-      bottomOffset={24}
-      extraKeyboardSpace={24}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-      showsVerticalScrollIndicator={false}
-    >
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.label}>Nombre</Text>
       <TextInput
         style={styles.input}
@@ -254,7 +245,7 @@ export default function FundEditorScreen({ route, navigation }: Props) {
           </View>
         </View>
       ) : null}
-    </KeyboardAwareScrollView>
+    </FormScrollView>
   );
 }
 

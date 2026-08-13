@@ -3,12 +3,12 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '../components/FormScrollView';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { getMovementById, updateMovement } from '../db/movementsRepo';
@@ -232,7 +232,7 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
   const showDestination = isAdjustment ? movement.destinationFundId != null : type !== 'gasto';
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.container}>
       {isAdjustment ? (
         <View style={styles.adjustBadge}>
           <Text style={styles.adjustBadgeText}>⚖️ Ajuste de saldo</Text>
@@ -329,7 +329,7 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
       <Pressable style={styles.deleteButton} onPress={handleDelete} disabled={saving}>
         <Text style={styles.deleteButtonText}>Eliminar movimiento</Text>
       </Pressable>
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

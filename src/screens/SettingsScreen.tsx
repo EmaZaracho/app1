@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FormScrollView } from '../components/FormScrollView';
 import * as Application from 'expo-application';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -120,7 +121,7 @@ export default function SettingsScreen({ navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <FormScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Pressable style={styles.fundsButton} onPress={() => navigation.navigate('Funds')}>
         <Text style={styles.fundsButtonText}>💵 Administrar fondos</Text>
         <Text style={styles.fundsButtonChevron}>›</Text>
@@ -208,7 +209,7 @@ export default function SettingsScreen({ navigation }: Props) {
         <Text style={styles.versionText}>GestorIA {versionInfo.version}</Text>
         <Text style={styles.versionText}>Compilación {versionInfo.build}</Text>
       </View>
-    </ScrollView>
+    </FormScrollView>
   );
 }
 
