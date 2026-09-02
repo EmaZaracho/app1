@@ -18,6 +18,8 @@ interface MovementListProps {
   fundNameById: Map<number, string>;
   onPressItem: (movementId: number) => void;
   onSwipeDelete: (movement: Movement) => void;
+  /** Contenido desplazable que precede a los movimientos (p. ej. resumen de Inicio). */
+  header?: React.ReactNode;
 }
 
 /** Lista de movimientos con swipe-to-delete, o el skeleton mientras carga. */
@@ -29,6 +31,7 @@ export function MovementList({
   fundNameById,
   onPressItem,
   onSwipeDelete,
+  header,
 }: MovementListProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -37,6 +40,7 @@ export function MovementList({
   if (loading) {
     return (
       <View>
+        {header}
         {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
           <MovementRowSkeleton key={i} />
         ))}
@@ -55,6 +59,7 @@ export function MovementList({
       contentContainerStyle={styles.listContent}
       data={movements}
       keyExtractor={(item) => String(item.id)}
+      ListHeaderComponent={header != null ? <>{header}</> : undefined}
       renderItem={({ item }) => {
         const display = describeMovement(item, context, (id) => fundNameById.get(id) ?? 'Fondo');
         const amountColor =
@@ -123,7 +128,7 @@ export function MovementList({
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     flex: { flex: 1, backgroundColor: theme.bg },
-    listContent: { padding: 16, flexGrow: 1 },
+    listContent: { paddingVertical: 16, flexGrow: 1 },
     deleteAction: {
       backgroundColor: theme.danger,
       justifyContent: 'center',
@@ -136,6 +141,7 @@ function createStyles(theme: Theme) {
       alignItems: 'center',
       gap: 12,
       paddingVertical: 12,
+      paddingHorizontal: 16,
       backgroundColor: theme.bg,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.border,

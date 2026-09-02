@@ -24,9 +24,7 @@ import { useMovementFilters } from '../hooks/useMovementFilters';
 import { useMovementComposer } from '../hooks/useMovementComposer';
 import { useReceiptScanner } from '../hooks/useReceiptScanner';
 import { useMovementUndo } from '../hooks/useMovementUndo';
-import { FundCarousel } from '../components/FundCarousel';
-import { HomeActionMenu } from '../components/HomeActionMenu';
-import { HomeAlerts } from '../components/HomeAlerts';
+import { HomeSummaryHeader } from '../components/HomeSummaryHeader';
 import { MovementFilterBar } from '../components/MovementFilterBar';
 import { MovementList } from '../components/MovementList';
 import { MovementPreview } from '../components/MovementPreview';
@@ -125,36 +123,26 @@ export default function HomeScreen({ navigation, route }: Props) {
 
   const displayError = composer.error ?? receiptScanner.error;
 
+  const summaryHeader = !homeData.initialLoading ? (
+    <HomeSummaryHeader
+      slides={homeData.slides}
+      activeIndex={Math.min(homeData.activeIndex, Math.max(homeData.slides.length - 1, 0))}
+      onIndexChange={homeData.selectSlide}
+      onAddFund={() => navigation.navigate('FundEditor', undefined)}
+      onRegisterAI={() => aiInputRef.current?.focus()}
+      onRegisterManual={() => navigation.navigate('MovementForm', { initialType: 'gasto' })}
+      onScanReceipt={handleScanReceiptPress}
+      onTransfer={() => navigation.navigate('MovementForm', { initialType: 'transferencia' })}
+      hasApiKey={composer.hasApiKey}
+      activeProvider={composer.activeProvider}
+      budgetAlerts={homeData.budgetAlerts}
+      onPressApiKey={() => navigation.navigate('MainTabs', { screen: 'SettingsTab' })}
+      onPressBudget={() => navigation.navigate('Budgets')}
+    />
+  ) : null;
+
   return (
     <View style={styles.flex}>
-      {!homeData.initialLoading && homeData.slides.length > 0 ? (
-        <FundCarousel
-          slides={homeData.slides}
-          activeIndex={Math.min(homeData.activeIndex, homeData.slides.length - 1)}
-          onIndexChange={homeData.selectSlide}
-          onAddFund={() => navigation.navigate('FundEditor', undefined)}
-        />
-      ) : null}
-
-      {!homeData.initialLoading ? (
-        <HomeActionMenu
-          onRegisterAI={() => aiInputRef.current?.focus()}
-          onRegisterManual={() => navigation.navigate('MovementForm', { initialType: 'gasto' })}
-          onScanReceipt={handleScanReceiptPress}
-          onTransfer={() => navigation.navigate('MovementForm', { initialType: 'transferencia' })}
-        />
-      ) : null}
-
-      {!homeData.initialLoading ? (
-        <HomeAlerts
-          hasApiKey={composer.hasApiKey}
-          activeProvider={composer.activeProvider}
-          budgetAlerts={homeData.budgetAlerts}
-          onPressApiKey={() => navigation.navigate('MainTabs', { screen: 'SettingsTab' })}
-          onPressBudget={() => navigation.navigate('Budgets')}
-        />
-      ) : null}
-
       <MovementFilterBar
         visible={!homeData.initialLoading && homeData.movements.length > 0}
         searchQuery={filters.searchQuery}
@@ -174,6 +162,7 @@ export default function HomeScreen({ navigation, route }: Props) {
         fundNameById={fundNameById}
         onPressItem={(movementId) => navigation.navigate('MovementDetail', { movementId })}
         onSwipeDelete={handleSwipeDelete}
+        header={summaryHeader}
       />
 
       <UndoBanner visible={!!undo.undoMovement} onUndo={undo.handleUndo} />

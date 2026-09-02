@@ -1,21 +1,25 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
 import type { RootStackParamList } from '../types';
 import {
-  getCurrentMonthExpenseCategoryTotals,
   getExpenseCategoryTotals,
+  getExpenseCategoryTotalsForMonth,
   getMonthlyTrend,
+  isFutureMonthKey,
+  sumMonthlyTrend,
   type CategoryTotal,
   type MonthlyTrendPoint,
+  type TrendRange,
 } from '../db/database';
 import { formatCurrency } from '../utils/format';
 import { iconForCategory, colorForCategory } from '../categoryVisuals';
 import { useTheme, type Theme } from '../theme';
 import { getTrackingStart } from '../db/financialPreferencesRepository';
+import { monthLabel, shiftMonthKey, toMonthKey } from '../recurring/recurringDateUtils';
 
 const CHART_HEIGHT = 120;
 const DONUT_RADIUS = 58;
@@ -25,6 +29,17 @@ const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 const DONUT_GAP = 3;
 
 type Range = 'month' | 'all';
+
+const TREND_RANGE_OPTIONS: { label: string; value: TrendRange }[] = [
+  { label: '6 meses', value: 6 },
+  { label: '12 meses', value: 12 },
+  { label: 'Todo', value: 'all' },
+];
+
+function trendSectionTitle(range: TrendRange): string {
+  if (range === 'all') return 'Todo el historial';
+  return `Últimos ${range} meses`;
+}
 
 function DonutChart({ data, theme }: { data: CategoryTotal[]; theme: Theme }) {
   const total = data.reduce((sum, d) => sum + d.total, 0);
@@ -84,6 +99,8 @@ export default function SummaryScreen() {
   const db = useDb();
   const navigation = useNavigation<Nav>();
   const [range, setRange] = useState<Range>('month');
+  const [trendRange, setTrendRange] = useState<TrendRange>(6);
+  const [selectedMonthKey, setSelectedMonthKey] = useState(() => toMonthKey(new Date()));
   const [totals, setTotals] = useState<CategoryTotal[]>([]);
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([]);
 
@@ -91,13 +108,13 @@ export default function SummaryScreen() {
     const trackingStart = await getTrackingStart(db);
     const [categoryTotals, monthlyTrend] = await Promise.all([
       range === 'month'
-        ? getCurrentMonthExpenseCategoryTotals(db, trackingStart)
+        ? getExpenseCategoryTotalsForMonth(db, selectedMonthKey, trackingStart)
         : getExpenseCategoryTotals(db, trackingStart),
-      getMonthlyTrend(db, 6, trackingStart),
+      getMonthlyTrend(db, trendRange, trackingStart),
     ]);
     setTotals(categoryTotals);
     setTrend(monthlyTrend);
-  }, [db, range]);
+  }, [db, range, trendRange, selectedMonthKey]);
 
   useFocusEffect(
     useCallback(() => {
@@ -105,8 +122,18 @@ export default function SummaryScreen() {
     }, [load])
   );
 
+  const goMonth = useCallback((delta: number) => {
+    setSelectedMonthKey((mk) => {
+      const next = shiftMonthKey(mk, delta);
+      return isFutureMonthKey(next) ? mk : next;
+    });
+  }, []);
+
+  const atCurrentMonth = selectedMonthKey === toMonthKey(new Date());
+
   const grandTotal = totals.reduce((sum, t) => sum + t.total, 0);
   const maxTrendValue = Math.max(1, ...trend.flatMap((p) => [p.income, p.expense]));
+  const trendTotals = useMemo(() => sumMonthlyTrend(trend), [trend]);
 
   return (
     <View style={themedStyles.container}>
@@ -123,7 +150,23 @@ export default function SummaryScreen() {
               <Text style={themedStyles.insightsButtonText}>📈 Análisis financiero y recomendaciones</Text>
             </Pressable>
 
-            <Text style={themedStyles.sectionTitle}>Últimos 6 meses</Text>
+            <View style={themedStyles.sectionHeaderRow}>
+              <Text style={themedStyles.sectionTitle}>{trendSectionTitle(trendRange)}</Text>
+              <View style={themedStyles.rangeToggle}>
+                {TREND_RANGE_OPTIONS.map((opt) => (
+                  <Text
+                    key={String(opt.value)}
+                    onPress={() => setTrendRange(opt.value)}
+                    style={[
+                      themedStyles.rangeChip,
+                      trendRange === opt.value && themedStyles.rangeChipSelected,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                ))}
+              </View>
+            </View>
             <View style={themedStyles.legendRow}>
               <View style={themedStyles.legendItem}>
                 <View style={[themedStyles.legendDot, { backgroundColor: theme.success }]} />
@@ -135,7 +178,11 @@ export default function SummaryScreen() {
               </View>
             </View>
             {trend.length > 0 ? (
-              <View style={themedStyles.trendChart}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={themedStyles.trendChartContent}
+              >
                 {trend.map((point) => (
                   <View key={point.monthKey} style={themedStyles.trendColumn}>
                     <View style={themedStyles.trendBars}>
@@ -157,15 +204,41 @@ export default function SummaryScreen() {
                     <Text style={themedStyles.trendLabel}>{point.monthLabel}</Text>
                   </View>
                 ))}
-              </View>
+              </ScrollView>
             ) : null}
+
+            <View style={themedStyles.trendTotalsRow}>
+              <View style={themedStyles.trendTotalItem}>
+                <Text style={themedStyles.trendTotalLabel}>Ingresos</Text>
+                <Text style={[themedStyles.trendTotalValue, { color: theme.success }]}>
+                  {formatCurrency(trendTotals.income)}
+                </Text>
+              </View>
+              <View style={themedStyles.trendTotalItem}>
+                <Text style={themedStyles.trendTotalLabel}>Gastos</Text>
+                <Text style={[themedStyles.trendTotalValue, { color: theme.danger }]}>
+                  {formatCurrency(trendTotals.expense)}
+                </Text>
+              </View>
+              <View style={themedStyles.trendTotalItem}>
+                <Text style={themedStyles.trendTotalLabel}>Balance neto</Text>
+                <Text
+                  style={[
+                    themedStyles.trendTotalValue,
+                    { color: trendTotals.balance < 0 ? theme.danger : theme.success },
+                  ]}
+                >
+                  {formatCurrency(trendTotals.balance)}
+                </Text>
+              </View>
+            </View>
 
             <View style={themedStyles.sectionHeaderRow}>
               <Text style={themedStyles.sectionTitle}>Gastos por categoría</Text>
               <View style={themedStyles.rangeToggle}>
                 {(
                   [
-                    { label: 'Este mes', value: 'month' as Range },
+                    { label: 'Mensual', value: 'month' as Range },
                     { label: 'Todo', value: 'all' as Range },
                   ] as const
                 ).map((opt) => (
@@ -182,6 +255,22 @@ export default function SummaryScreen() {
                 ))}
               </View>
             </View>
+
+            {range === 'month' ? (
+              <View style={themedStyles.monthNav}>
+                <Pressable onPress={() => goMonth(-1)} hitSlop={12}>
+                  <Text style={themedStyles.monthArrow}>‹</Text>
+                </Pressable>
+                <Text style={themedStyles.monthNavLabel}>{monthLabel(selectedMonthKey)}</Text>
+                <Pressable onPress={() => goMonth(1)} hitSlop={12} disabled={atCurrentMonth}>
+                  <Text
+                    style={[themedStyles.monthArrow, atCurrentMonth && themedStyles.monthArrowDisabled]}
+                  >
+                    ›
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             {totals.length > 0 ? (
               <View style={themedStyles.donutWrap}>
@@ -212,7 +301,11 @@ export default function SummaryScreen() {
         }}
         ListEmptyComponent={
           <Text style={themedStyles.emptyText}>
-            {range === 'month' ? 'Todavía no hay gastos este mes.' : 'Todavía no hay gastos para resumir.'}
+            {range === 'month'
+              ? atCurrentMonth
+                ? 'Todavía no hay gastos este mes.'
+                : `Todavía no hay gastos en ${monthLabel(selectedMonthKey)}.`
+              : 'Todavía no hay gastos para resumir.'}
           </Text>
         }
       />
@@ -275,13 +368,16 @@ function createStyles(theme: Theme) {
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     legendDot: { width: 8, height: 8, borderRadius: 4 },
     legendText: { fontSize: 12, color: theme.textSecondary },
-    trendChart: {
+    trendChartContent: {
+      flexGrow: 1,
       flexDirection: 'row',
-      justifyContent: 'space-around',
+      justifyContent: 'center',
       alignItems: 'flex-end',
+      gap: 14,
+      paddingHorizontal: 4,
       marginBottom: 24,
     },
-    trendColumn: { alignItems: 'center' },
+    trendColumn: { alignItems: 'center', minWidth: 34 },
     trendBars: {
       flexDirection: 'row',
       gap: 4,
@@ -290,6 +386,27 @@ function createStyles(theme: Theme) {
     },
     trendBar: { width: 10, borderRadius: 3 },
     trendLabel: { fontSize: 11, color: theme.textSecondary, marginTop: 6, textTransform: 'capitalize' },
+    trendTotalsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      backgroundColor: theme.surfaceAlt,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      marginBottom: 24,
+    },
+    trendTotalItem: { flex: 1, alignItems: 'center' },
+    trendTotalLabel: { fontSize: 11, color: theme.textMuted },
+    trendTotalValue: { fontSize: 14, fontWeight: '700', marginTop: 2 },
+    monthNav: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    monthArrow: { fontSize: 22, color: theme.primary, fontWeight: '700', paddingHorizontal: 12 },
+    monthArrowDisabled: { color: theme.textMuted, opacity: 0.4 },
+    monthNavLabel: { fontSize: 14, fontWeight: '700', color: theme.text, textTransform: 'capitalize' },
     donutWrap: { alignItems: 'center', marginBottom: 20 },
     row: { marginBottom: 18 },
     rowHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },

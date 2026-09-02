@@ -12,10 +12,11 @@ export interface FundBalanceRow {
 }
 
 export interface SlideStats {
+  /** Saldo histórico (no limitado por mes ni por trackingStart). */
   balance: number;
-  /** Ingresos reales (excluye transferencias y ajustes). */
+  /** Ingresos reales del mes calendario en curso (excluye transferencias y ajustes; respeta trackingStart). */
   income: number;
-  /** Gastos reales (excluye transferencias y ajustes). */
+  /** Gastos reales del mes calendario en curso (excluye transferencias y ajustes; respeta trackingStart). */
   expense: number;
   /** Variación de saldo del mes en curso. */
   monthlyVariation: number;
@@ -95,12 +96,52 @@ export async function getFundIncomeExpense(
   return { income: row?.income ?? 0, expense: row?.expense ?? 0 };
 }
 
+/** Ingresos y gastos globales reales del mes calendario en curso (excluye transferencias y ajustes). */
+export async function getGlobalCurrentMonthIncomeExpense(
+  db: SqlDatabase,
+  trackingStart: string | null = null,
+  now: Date = new Date()
+): Promise<{ income: number; expense: number }> {
+  const { start, end } = currentMonthRange(now);
+  const row = await db.getFirstAsync<{ income: number; expense: number }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE 0 END), 0) AS income,
+       COALESCE(SUM(CASE WHEN type = 'gasto' THEN amount ELSE 0 END), 0) AS expense
+     FROM movements
+     WHERE created_at >= ? AND created_at < ?
+       AND (? IS NULL OR created_at >= ?)`,
+    [start, end, trackingStart, trackingStart]
+  );
+  return { income: row?.income ?? 0, expense: row?.expense ?? 0 };
+}
+
+/** Ingresos y gastos reales de un fondo del mes calendario en curso (excluye transferencias y ajustes). */
+export async function getFundCurrentMonthIncomeExpense(
+  db: SqlDatabase,
+  fundId: number,
+  trackingStart: string | null = null,
+  now: Date = new Date()
+): Promise<{ income: number; expense: number }> {
+  const { start, end } = currentMonthRange(now);
+  const row = await db.getFirstAsync<{ income: number; expense: number }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'ingreso' AND destination_fund_id = ? THEN amount ELSE 0 END), 0) AS income,
+       COALESCE(SUM(CASE WHEN type = 'gasto' AND source_fund_id = ? THEN amount ELSE 0 END), 0) AS expense
+     FROM movements
+     WHERE created_at >= ? AND created_at < ?
+       AND (? IS NULL OR created_at >= ?)`,
+    [fundId, fundId, start, end, trackingStart, trackingStart]
+  );
+  return { income: row?.income ?? 0, expense: row?.expense ?? 0 };
+}
+
 /** Variación mensual del Total: ingresos, gastos y ajustes; transferencias se cancelan. */
 export async function getTotalMonthlyVariation(
   db: SqlDatabase,
-  trackingStart: string | null = null
+  trackingStart: string | null = null,
+  now: Date = new Date()
 ): Promise<number> {
-  const { start, end } = currentMonthRange();
+  const { start, end } = currentMonthRange(now);
   const row = await db.getFirstAsync<{ variation: number }>(
     `SELECT
        COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE 0 END), 0)
@@ -119,9 +160,10 @@ export async function getTotalMonthlyVariation(
 export async function getFundMonthlyVariation(
   db: SqlDatabase,
   fundId: number,
-  trackingStart: string | null = null
+  trackingStart: string | null = null,
+  now: Date = new Date()
 ): Promise<number> {
-  const { start, end } = currentMonthRange();
+  const { start, end } = currentMonthRange(now);
   const row = await db.getFirstAsync<{ variation: number }>(
     `SELECT
        COALESCE(SUM(CASE WHEN destination_fund_id = ? THEN amount ELSE 0 END), 0)
@@ -134,26 +176,31 @@ export async function getFundMonthlyVariation(
   return row?.variation ?? 0;
 }
 
-/** Estadísticas de la vista Total (sintética). */
-export async function getTotalStats(db: SqlDatabase, trackingStart: string | null = null): Promise<SlideStats> {
+/** Estadísticas de la vista Total (sintética). Ingresos/gastos son solo del mes en curso; el saldo es histórico. */
+export async function getTotalStats(
+  db: SqlDatabase,
+  trackingStart: string | null = null,
+  now: Date = new Date()
+): Promise<SlideStats> {
   const [balance, incExp, monthlyVariation] = await Promise.all([
     getTotalBalance(db),
-    getGlobalIncomeExpense(db, trackingStart),
-    getTotalMonthlyVariation(db, trackingStart),
+    getGlobalCurrentMonthIncomeExpense(db, trackingStart, now),
+    getTotalMonthlyVariation(db, trackingStart, now),
   ]);
   return { balance, income: incExp.income, expense: incExp.expense, monthlyVariation };
 }
 
-/** Estadísticas de un fondo puntual. */
+/** Estadísticas de un fondo puntual. Ingresos/gastos son solo del mes en curso; el saldo es histórico. */
 export async function getFundStats(
   db: SqlDatabase,
   fundId: number,
-  trackingStart: string | null = null
+  trackingStart: string | null = null,
+  now: Date = new Date()
 ): Promise<SlideStats> {
   const [balance, incExp, monthlyVariation] = await Promise.all([
     getFundBalance(db, fundId),
-    getFundIncomeExpense(db, fundId, trackingStart),
-    getFundMonthlyVariation(db, fundId, trackingStart),
+    getFundCurrentMonthIncomeExpense(db, fundId, trackingStart, now),
+    getFundMonthlyVariation(db, fundId, trackingStart, now),
   ]);
   return { balance, income: incExp.income, expense: incExp.expense, monthlyVariation };
 }

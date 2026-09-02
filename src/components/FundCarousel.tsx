@@ -180,7 +180,7 @@ function SlideContent({
           </Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Este mes</Text>
+          <Text style={styles.statLabel}>Variación mensual</Text>
           <Text
             style={[
               styles.statValue,
