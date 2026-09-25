@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
+import { requestReminderSync } from '../recurring/recurringNotifications';
 import {
   deleteRule,
   getRuleById,
@@ -62,6 +63,7 @@ export default function RecurringExpenseDetailScreen({ route, navigation }: Prop
 
   async function toggleActive() {
     await setRuleActive(db, ruleId, !rule!.isActive);
+    requestReminderSync(db);
     await load();
   }
 
@@ -74,6 +76,7 @@ export default function RecurringExpenseDetailScreen({ route, navigation }: Prop
         onPress: async () => {
           try {
             await deleteRule(db, ruleId);
+            requestReminderSync(db);
             navigation.goBack();
           } catch (err) {
             Alert.alert('No se puede eliminar', err instanceof Error ? err.message : 'Error inesperado.');

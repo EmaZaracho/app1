@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { FormScrollView } from '../components/FormScrollView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
+import { requestReminderSync } from '../recurring/recurringNotifications';
 import { getRuleById, insertRule } from '../db/recurringExpenseRulesRepository';
 import { editWholeSeries } from '../recurring/recurringRuleEditing';
 import { ensureOccurrencesForMonth } from '../recurring/recurringOccurrenceGenerator';
@@ -134,6 +135,7 @@ export default function RecurringExpenseEditorScreen({ route, navigation }: Prop
         const now = new Date();
         await ensureOccurrencesForMonth(db, now.getFullYear(), now.getMonth());
       }
+      requestReminderSync(db);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
     } catch (err) {

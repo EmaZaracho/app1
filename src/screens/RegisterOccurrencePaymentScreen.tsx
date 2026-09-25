@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { FormScrollView } from '../components/FormScrollView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
+import { requestReminderSync } from '../recurring/recurringNotifications';
 import type { SqlDatabase } from '../db/sqlDatabase';
 import { getOccurrenceById } from '../db/recurringExpenseOccurrencesRepository';
 import { getRuleById } from '../db/recurringExpenseRulesRepository';
@@ -168,6 +169,7 @@ function PaymentForm({ data, db, navigation, occurrenceId }: PaymentFormProps) {
         description: result.movement.description,
         fundId: result.movement.sourceFundId!,
       });
+      requestReminderSync(db);
       if (!mountedRef.current) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();

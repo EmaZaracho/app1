@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { SqlDatabase } from '../db/sqlDatabase';
 import { getRules } from '../db/recurringExpenseRulesRepository';
@@ -8,6 +9,30 @@ import { getRemindersEnabled, setRemindersEnabled } from './recurringReminderSet
 import { toMonthKey, shiftMonthKey, parseMonthKey } from './recurringDateUtils';
 
 export { getRemindersEnabled, setRemindersEnabled } from './recurringReminderSettings';
+
+const REMINDER_CHANNEL_ID = 'recordatorios';
+
+/**
+ * Configura cómo se muestran las notificaciones: sin handler, expo-notifications
+ * descarta las que llegan con la app en primer plano. En Android crea además
+ * un canal propio con importancia alta para que aparezcan como banner.
+ */
+export async function configureNotifications(): Promise<void> {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL_ID, {
+      name: 'Recordatorios de pagos',
+      importance: Notifications.AndroidImportance.HIGH,
+    });
+  }
+}
 
 /**
  * Pide permiso de notificaciones SOLO cuando el usuario activa los
@@ -78,9 +103,28 @@ export async function reconcileReminders(db: SqlDatabase, now: Date = new Date()
     await Notifications.scheduleNotificationAsync({
       identifier: item.identifier,
       content: { title: item.title, body: item.body },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: item.fireDate },
-    }).catch(() => {});
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: item.fireDate,
+        channelId: REMINDER_CHANNEL_ID,
+      },
+    }).catch((err) => console.warn('No se pudo programar el recordatorio', item.identifier, err));
   }
+}
+
+let pendingSync: Promise<void> = Promise.resolve();
+
+/**
+ * Reprograma los recordatorios tras un cambio (alta/edición de reglas, pagos,
+ * omisiones, apertura de la app). Serializa las llamadas para que dos
+ * reconciliaciones no se pisen entre el cancelado y la reprogramación, y nunca
+ * lanza: un fallo al notificar no debe romper el flujo que lo disparó.
+ */
+export function requestReminderSync(db: SqlDatabase): Promise<void> {
+  pendingSync = pendingSync
+    .then(() => reconcileReminders(db))
+    .catch((err) => console.warn('No se pudieron sincronizar los recordatorios', err));
+  return pendingSync;
 }
 
 /** Desactiva los recordatorios y cancela los programados. */

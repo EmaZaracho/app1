@@ -17,7 +17,7 @@ import { reconcileOccurrences } from '../recurring/recurringPayment';
 import {
   disableReminders,
   getRemindersEnabled,
-  reconcileReminders,
+  requestReminderSync,
   requestReminderPermission,
   setRemindersEnabled,
 } from '../recurring/recurringNotifications';
@@ -125,11 +125,7 @@ export default function FinancialCalendarScreen() {
       }
       await setRemindersEnabled(true);
       setRemindersEnabledState(true);
-      try {
-        await reconcileReminders(db);
-      } catch {
-        // En Expo Go las notificaciones locales pueden estar limitadas; no es un error bloqueante.
-      }
+      await requestReminderSync(db);
     } else {
       await disableReminders();
       setRemindersEnabledState(false);

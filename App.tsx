@@ -7,6 +7,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { initDatabase } from './src/db/database';
 import { ThemeProvider, useThemeControls } from './src/theme';
 import { UpdateNotice } from './src/components/UpdateNotice';
+import { ReminderSync } from './src/components/ReminderSync';
 
 function ThemedStatusBar() {
   const { resolved } = useThemeControls();
@@ -23,6 +24,7 @@ export default function App() {
               <AppNavigator />
               <ThemedStatusBar />
               <UpdateNotice />
+              <ReminderSync />
             </SQLiteProvider>
           </KeyboardProvider>
         </SafeAreaProvider>

@@ -4,6 +4,7 @@ import { FormScrollView } from '../components/FormScrollView';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
+import { requestReminderSync } from '../recurring/recurringNotifications';
 import {
   deleteOccurrence,
   getOccurrenceById,
@@ -64,6 +65,7 @@ export default function RecurringOccurrenceDetailScreen({ route, navigation }: P
   async function run(action: () => Promise<void>) {
     try {
       await action();
+      requestReminderSync(db);
       await load();
     } catch (err) {
       Alert.alert('No se pudo completar', err instanceof Error ? err.message : 'Error inesperado.');
@@ -189,6 +191,7 @@ export default function RecurringOccurrenceDetailScreen({ route, navigation }: P
                   style: 'destructive',
                   onPress: async () => {
                     await deleteOccurrence(db, occurrenceId);
+                    requestReminderSync(db);
                     navigation.goBack();
                   },
                 },
@@ -197,6 +200,7 @@ export default function RecurringOccurrenceDetailScreen({ route, navigation }: P
                   style: 'destructive',
                   onPress: async () => {
                     await deleteOccurrenceAndFollowing(db, occurrenceId);
+                    requestReminderSync(db);
                     navigation.goBack();
                   },
                 },
