@@ -149,9 +149,10 @@ export default function HomeScreen({ navigation, route }: Props) {
         onSearchChange={filters.setSearchQuery}
         filterType={filters.filterType}
         onFilterTypeChange={filters.setFilterType}
-        hasAdvancedFilter={filters.hasAdvancedFilter}
         filterCategory={filters.filterCategory}
-        onClearAdvanced={filters.clearAdvancedFilters}
+        onClearCategory={filters.clearFilterCategory}
+        filterPeriod={filters.filterPeriod}
+        onFilterPeriodChange={filters.setFilterPeriod}
       />
 
       <MovementList

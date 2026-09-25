@@ -18,6 +18,8 @@ export interface UseMovementFiltersResult {
   setFilterType: (v: MovementType | null) => void;
   filterCategory: Category | null;
   filterPeriod: MovementPeriod | null;
+  setFilterPeriod: (v: MovementPeriod | null) => void;
+  clearFilterCategory: () => void;
   filteredMovements: Movement[];
   isFiltering: boolean;
   hasAdvancedFilter: boolean;
@@ -53,6 +55,10 @@ export function useMovementFilters(movements: Movement[]): UseMovementFiltersRes
     setFilterPeriod(null);
   }
 
+  function clearFilterCategory() {
+    setFilterCategory(null);
+  }
+
   function applyExternalFilter(filter: HomeMovementFilter) {
     setFilterType(filter.type ?? null);
     setFilterCategory(filter.category ?? null);
@@ -68,6 +74,8 @@ export function useMovementFilters(movements: Movement[]): UseMovementFiltersRes
     setFilterType,
     filterCategory,
     filterPeriod,
+    setFilterPeriod,
+    clearFilterCategory,
     filteredMovements,
     isFiltering,
     hasAdvancedFilter,
