@@ -3,13 +3,15 @@ import { addMovement } from '../src/db/movementsRepo';
 import { setBudget } from '../src/db/budgetsRepo';
 import { buildFinancialSnapshot } from '../src/analytics/financialSnapshot';
 import { computeSnapshotHash } from '../src/analytics/snapshotHash';
-import { freshDb } from './helpers';
+import { freezeSystemTime, freshDb } from './helpers';
 import type { SavingsGoal } from '../src/types/financialAnalytics';
 
 const NOW = new Date(2026, 6, 20, 12, 0, 0);
 const NO_GOAL: SavingsGoal = { enabled: false, mode: 'fixed_amount', targetValue: 0 };
 
 describe('hash de invalidación de caché', () => {
+  freezeSystemTime(NOW);
+
   it('mismos datos y configuración producen el mismo hash', async () => {
     const db = await freshDb();
     const efectivo = (await getFunds(db, false))[0].id;

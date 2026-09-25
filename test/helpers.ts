@@ -2,6 +2,27 @@ import { initDatabase } from '../src/db/schema';
 import type { SqlDatabase } from '../src/db/sqlDatabase';
 import { createTestDb } from './betterSqliteAdapter';
 
+/**
+ * Fija la fecha del sistema durante los tests del bloque actual. Solo se
+ * reemplaza `Date`: los timers siguen siendo reales para no trabar el código
+ * async. Evita que los tests dependan del día en que se corren.
+ */
+export function freezeSystemTime(now: Date): void {
+  beforeEach(() => {
+    jest.useFakeTimers({
+      now,
+      doNotFake: [
+        'hrtime', 'nextTick', 'performance', 'queueMicrotask',
+        'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback',
+        'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout',
+      ],
+    });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+}
+
 /** Crea una base inicializada (esquema + fondo Efectivo). */
 export async function freshDb(): Promise<SqlDatabase> {
   const { db } = createTestDb();

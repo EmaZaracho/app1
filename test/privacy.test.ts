@@ -2,11 +2,13 @@ import { getFunds, createFund } from '../src/db/fundsRepo';
 import { addMovement } from '../src/db/movementsRepo';
 import { buildFinancialSnapshot } from '../src/analytics/financialSnapshot';
 import { buildAdviceInputFromSnapshot } from '../src/types/financialAdvice';
-import { freshDb } from './helpers';
+import { freezeSystemTime, freshDb } from './helpers';
 
 const NOW = new Date(2026, 6, 20, 12, 0, 0);
 
 describe('privacidad del payload enviado a la IA', () => {
+  freezeSystemTime(NOW);
+
   it('el input a la IA no incluye movimientos individuales, texto, descripciones, ids ni fondos', async () => {
     const db = await freshDb();
     const efectivo = (await getFunds(db, false))[0].id;

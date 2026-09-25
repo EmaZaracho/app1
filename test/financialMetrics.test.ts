@@ -6,9 +6,11 @@ import {
   getPeriodExpenseCategoryTotals,
   getPeriodFinancials,
 } from '../src/analytics/financialMetrics';
-import { freshDb } from './helpers';
+import { freezeSystemTime, freshDb } from './helpers';
 
 const RANGE = { start: new Date(2026, 6, 1).toISOString(), end: new Date(2026, 7, 1).toISOString() };
+// Los movimientos se guardan con la fecha actual: se fija dentro de RANGE.
+const NOW = new Date(2026, 6, 20, 12, 0, 0);
 const OUTSIDE_DATE = new Date(2026, 5, 15).toISOString();
 
 async function seedMovement(db: any, efectivo: number, opts: any) {
@@ -24,6 +26,8 @@ async function seedMovement(db: any, efectivo: number, opts: any) {
 }
 
 describe('métricas financieras del período', () => {
+  freezeSystemTime(NOW);
+
   it('ingresos/gastos solo consideran type=ingreso/gasto; transferencias y ajustes se excluyen del ahorro operativo', async () => {
     const db = await freshDb();
     const efectivo = (await getFunds(db, false))[0].id;
