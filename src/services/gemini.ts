@@ -1,6 +1,7 @@
 import { AIProviderError } from './aiErrors';
+import { AI_PROVIDERS } from '../types';
 
-const GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const GEMINI_MODEL = AI_PROVIDERS.find((p) => p.id === 'gemini')!.model;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 /**

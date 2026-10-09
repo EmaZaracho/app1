@@ -1,5 +1,7 @@
 import { AIProviderError } from './aiErrors';
+import { AI_PROVIDERS } from '../types';
 
+const DEEPSEEK_MODEL = AI_PROVIDERS.find((p) => p.id === 'deepseek')!.model;
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
 /** Pide una completación a DeepSeek y devuelve el contenido crudo (JSON string). */
@@ -21,13 +23,14 @@ export async function deepseekComplete(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: DEEPSEEK_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userText },
         ],
         response_format: { type: 'json_object' },
         temperature: 0,
+        thinking: { type: 'disabled' },
       }),
     });
   } catch {

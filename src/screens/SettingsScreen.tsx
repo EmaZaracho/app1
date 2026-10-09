@@ -201,6 +201,7 @@ export default function SettingsScreen({ navigation }: Props) {
         </Text>
         .
       </Text>
+      <Text style={styles.modelText}>Modelo en uso: {providerInfo.model}</Text>
 
       <Pressable style={styles.saveButton} onPress={handleSave}>
         <Text style={styles.saveButtonText}>{saved ? 'Guardado ✓' : 'Guardar'}</Text>
@@ -270,6 +271,7 @@ function createStyles(theme: Theme) {
       paddingVertical: 10,
       fontSize: 16,
     },
+    modelText: { fontSize: 12, color: theme.textMuted, marginTop: 6 },
     hint: { fontSize: 13, color: theme.textSecondary, marginTop: 10, lineHeight: 18 },
     link: { color: theme.primary },
     saveButton: {

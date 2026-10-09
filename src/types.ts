@@ -37,9 +37,9 @@ export type CategorizedMovementType = 'gasto' | 'ingreso';
 
 export type AIProvider = 'deepseek' | 'gemini';
 
-export const AI_PROVIDERS: { id: AIProvider; label: string; keyUrl: string }[] = [
-  { id: 'deepseek', label: 'DeepSeek', keyUrl: 'https://platform.deepseek.com' },
-  { id: 'gemini', label: 'Gemini', keyUrl: 'https://aistudio.google.com/apikey' },
+export const AI_PROVIDERS: { id: AIProvider; label: string; keyUrl: string; model: string }[] = [
+  { id: 'deepseek', label: 'DeepSeek', keyUrl: 'https://platform.deepseek.com', model: 'deepseek-flash' },
+  { id: 'gemini', label: 'Gemini', keyUrl: 'https://aistudio.google.com/apikey', model: 'gemini-3.5-flash-lite' },
 ];
 
 export function categoriesForType(type: CategorizedMovementType): readonly Category[] {
