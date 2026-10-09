@@ -87,7 +87,7 @@ describe('conservación de datos: instalación 1.0.0 -> arranque 1.1.0', () => {
 
     await setBudget(db, 'Comida', 50000);
     await setSavingsGoal(db, { enabled: true, mode: 'fixed_amount', targetValue: 100000 });
-    await setCategoryPriority(db, 'Entretenimiento', 'essential');
+    await setCategoryPriority(db, 'Ocio', 'essential');
 
     const rule: RecurringRuleInput = {
       name: 'Internet',

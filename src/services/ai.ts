@@ -1,4 +1,5 @@
 import type { AIProvider } from '../types';
+import type { CategoryKeyword } from '../db/categoryKeywordsRepo';
 import type { AIFundInfo, AIMovementResponse } from './aiTypes';
 import { deepseekComplete } from './deepseek';
 import { geminiComplete } from './gemini';
@@ -19,9 +20,10 @@ export async function parseMovement(
   text: string,
   provider: AIProvider,
   apiKey: string,
-  funds: AIFundInfo[]
+  funds: AIFundInfo[],
+  keywords: CategoryKeyword[] = []
 ): Promise<AIMovementResponse> {
-  const systemPrompt = buildMovementPrompt(funds);
+  const systemPrompt = buildMovementPrompt(funds, keywords);
   const content =
     provider === 'gemini'
       ? await geminiComplete(systemPrompt, text, apiKey, MOVEMENT_RESPONSE_SCHEMA)

@@ -2,14 +2,15 @@ import { useCallback, useState } from 'react';
 import { LayoutAnimation } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  getBudgetAlerts,
+  getBudgetProgress,
   getFunds,
   getFundsWithBalances,
   getFundStats,
   getMovements,
   getMovementsForFund,
+  getPurchaseMerchants,
   getTotalStats,
-  type BudgetAlert,
+  type BudgetProgress,
 } from '../db/database';
 import { getTrackingStart } from '../db/financialPreferencesRepository';
 import type { CarouselSlide } from '../components/FundCarousel';
@@ -22,7 +23,8 @@ export interface UseHomeDataResult {
   slides: CarouselSlide[];
   activeIndex: number;
   movements: Movement[];
-  budgetAlerts: BudgetAlert[];
+  purchaseMerchants: Map<number, string | null>;
+  budgetAlerts: BudgetProgress[];
   initialLoading: boolean;
   selectSlide: (index: number) => void;
   reload: () => Promise<void>;
@@ -40,7 +42,8 @@ export function useHomeData(db: SqlDatabase): UseHomeDataResult {
   const [slides, setSlides] = useState<CarouselSlide[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [movements, setMovements] = useState<Movement[]>([]);
-  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
+  const [purchaseMerchants, setPurchaseMerchants] = useState<Map<number, string | null>>(new Map());
+  const [budgetAlerts, setBudgetAlerts] = useState<BudgetProgress[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
 
   const buildSlides = useCallback(
@@ -60,10 +63,13 @@ export function useHomeData(db: SqlDatabase): UseHomeDataResult {
   const loadMovementsForSlide = useCallback(
     async (slide: CarouselSlide | undefined) => {
       if (!slide) return;
-      const list =
-        slide.kind === 'fund' ? await getMovementsForFund(db, slide.fund.id) : await getMovements(db);
+      const [list, merchants] = await Promise.all([
+        slide.kind === 'fund' ? getMovementsForFund(db, slide.fund.id) : getMovements(db),
+        getPurchaseMerchants(db),
+      ]);
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setMovements(list);
+      setPurchaseMerchants(merchants);
     },
     [db]
   );
@@ -75,7 +81,7 @@ export function useHomeData(db: SqlDatabase): UseHomeDataResult {
       getTrackingStart(db),
     ]);
     const [alerts, nextSlides] = await Promise.all([
-      getBudgetAlerts(db, trackingStart),
+      getBudgetProgress(db, trackingStart),
       buildSlides(activeFunds, trackingStart),
     ]);
     setFunds(activeFunds);
@@ -107,6 +113,7 @@ export function useHomeData(db: SqlDatabase): UseHomeDataResult {
     slides,
     activeIndex,
     movements,
+    purchaseMerchants,
     budgetAlerts,
     initialLoading,
     selectSlide,

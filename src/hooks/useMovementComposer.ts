@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
-import { addMovement } from '../db/database';
+import { addMovement, getCategoryKeywords } from '../db/database';
 import { getFundMatchTargets } from '../db/fundsRepo';
 import { getApiKey, getSelectedProvider } from '../services/apiKey';
 import { AIProviderError, parseMovement, resolveAIMovement } from '../services/ai';
@@ -89,7 +89,8 @@ export function useMovementComposer(
         return;
       }
       const aiFunds = funds.map((f) => ({ name: f.name, aliases: f.aliases.map((a) => a.alias) }));
-      const aiResponse = await parseMovement(trimmed, provider, apiKey, aiFunds);
+      const keywords = await getCategoryKeywords(db);
+      const aiResponse = await parseMovement(trimmed, provider, apiKey, aiFunds, keywords);
       const targets = await getFundMatchTargets(db, true);
       const resolved = resolveAIMovement(aiResponse, targets);
 

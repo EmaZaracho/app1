@@ -1,14 +1,19 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
-import type { RootStackParamList } from '../types';
+import type { ExpenseCategory, Movement, RootStackParamList } from '../types';
+import { formatDayMonthYear } from '../domain/periodInput';
+import { categoryChange, previousMonthComparison, type ComparisonPeriod } from '../domain/categoryChange';
 import {
   getExpenseCategoryTotals,
   getExpenseCategoryTotalsForMonth,
+  getExpenseCategoryTotalsForRange,
+  getExpensesForCategory,
   getMonthlyTrend,
+  monthRange,
   isFutureMonthKey,
   sumMonthlyTrend,
   type CategoryTotal,
@@ -103,15 +108,26 @@ export default function SummaryScreen() {
   const [selectedMonthKey, setSelectedMonthKey] = useState(() => toMonthKey(new Date()));
   const [totals, setTotals] = useState<CategoryTotal[]>([]);
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([]);
+  const [previousTotals, setPreviousTotals] = useState<Map<string, number> | null>(null);
+  const [comparison, setComparison] = useState<ComparisonPeriod | null>(null);
+  const [expanded, setExpanded] = useState<ExpenseCategory | null>(null);
+  const [expandedMovements, setExpandedMovements] = useState<Movement[]>([]);
 
   const load = useCallback(async () => {
     const trackingStart = await getTrackingStart(db);
-    const [categoryTotals, monthlyTrend] = await Promise.all([
+    // Solo el modo mensual compara; "Todo" no tiene un período anterior.
+    const nextComparison = range === 'month' ? previousMonthComparison(selectedMonthKey) : null;
+    const [categoryTotals, monthlyTrend, previous] = await Promise.all([
       range === 'month'
         ? getExpenseCategoryTotalsForMonth(db, selectedMonthKey, trackingStart)
         : getExpenseCategoryTotals(db, trackingStart),
       getMonthlyTrend(db, trendRange, trackingStart),
+      nextComparison
+        ? getExpenseCategoryTotalsForRange(db, nextComparison.range, trackingStart)
+        : Promise.resolve(null),
     ]);
+    setComparison(nextComparison);
+    setPreviousTotals(previous ? new Map(previous.map((t) => [t.category, t.total])) : null);
     setTotals(categoryTotals);
     setTrend(monthlyTrend);
   }, [db, range, trendRange, selectedMonthKey]);
@@ -121,6 +137,37 @@ export default function SummaryScreen() {
       load();
     }, [load])
   );
+
+  // Cambiar de mes o de rango deja de mostrar los gastos de la categoría abierta.
+  useEffect(() => {
+    setExpanded(null);
+  }, [range, selectedMonthKey]);
+
+  // Recarga los gastos de la categoría abierta cuando cambian los totales (p. ej. al volver de editar).
+  useEffect(() => {
+    if (!expanded) {
+      setExpandedMovements([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const trackingStart = await getTrackingStart(db);
+      const movements = await getExpensesForCategory(
+        db,
+        expanded,
+        range === 'month' ? monthRange(selectedMonthKey) : null,
+        trackingStart
+      );
+      if (!cancelled) setExpandedMovements(movements);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [db, expanded, range, selectedMonthKey, totals]);
+
+  const toggleCategory = useCallback((category: ExpenseCategory) => {
+    setExpanded((current) => (current === category ? null : category));
+  }, []);
 
   const goMonth = useCallback((delta: number) => {
     setSelectedMonthKey((mk) => {
@@ -272,6 +319,12 @@ export default function SummaryScreen() {
               </View>
             ) : null}
 
+            {comparison?.partial ? (
+              <Text style={themedStyles.comparisonNote}>
+                Se compara con los primeros {comparison.days} días del mes anterior.
+              </Text>
+            ) : null}
+
             {totals.length > 0 ? (
               <View style={themedStyles.donutWrap}>
                 <DonutChart data={totals} theme={theme} />
@@ -282,20 +335,62 @@ export default function SummaryScreen() {
         renderItem={({ item }) => {
           const pct = grandTotal > 0 ? (item.total / grandTotal) * 100 : 0;
           const categoryColor = colorForCategory(item.category, theme.scheme);
+          const change = previousTotals ? categoryChange(item.total, previousTotals.get(item.category) ?? 0) : null;
+          const isExpanded = expanded === item.category;
           return (
             <View style={themedStyles.row}>
-              <View style={themedStyles.rowHeader}>
-                <Text style={themedStyles.category}>
-                  {iconForCategory(item.category)} {item.category}
-                </Text>
-                <Text style={themedStyles.amount}>{formatCurrency(item.total)}</Text>
-              </View>
-              <View style={themedStyles.barTrack}>
-                <View
-                  style={[themedStyles.barFill, { width: `${pct}%`, backgroundColor: categoryColor }]}
-                />
-              </View>
-              <Text style={themedStyles.pctText}>{pct.toFixed(1)}%</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isExpanded }}
+                onPress={() => toggleCategory(item.category as ExpenseCategory)}
+              >
+                <View style={themedStyles.rowHeader}>
+                  <Text style={themedStyles.category}>
+                    {iconForCategory(item.category)} {item.category} {isExpanded ? '▾' : '▸'}
+                  </Text>
+                  <Text style={themedStyles.amount}>{formatCurrency(item.total)}</Text>
+                </View>
+                <View style={themedStyles.barTrack}>
+                  <View
+                    style={[themedStyles.barFill, { width: `${pct}%`, backgroundColor: categoryColor }]}
+                  />
+                </View>
+                <View style={themedStyles.pctRow}>
+                  <Text style={themedStyles.pctText}>{pct.toFixed(1)}%</Text>
+                  {change ? (
+                    <Text
+                      style={[
+                        themedStyles.changeText,
+                        change.kind === 'up' && { color: theme.danger },
+                        change.kind === 'down' && { color: theme.success },
+                      ]}
+                    >
+                      {change.kind === 'up'
+                        ? `▲ ${change.percent}% vs. mes anterior`
+                        : change.kind === 'down'
+                          ? `▼ ${change.percent}% vs. mes anterior`
+                          : change.kind === 'new'
+                            ? 'Sin gasto el mes anterior'
+                            : 'Igual que el mes anterior'}
+                    </Text>
+                  ) : null}
+                </View>
+              </Pressable>
+              {isExpanded ? (
+                <View style={themedStyles.detailList}>
+                  {expandedMovements.map((m) => (
+                    <View key={m.id} style={themedStyles.detailRow}>
+                      <View style={themedStyles.detailInfo}>
+                        <Text style={themedStyles.detailDescription} numberOfLines={2}>
+                          {m.description || 'Sin descripción'}
+                        </Text>
+                        <Text style={themedStyles.detailDate}>{formatDayMonthYear(m.createdAt)}</Text>
+                      </View>
+                      <Text style={themedStyles.detailAmount}>{formatCurrency(m.amount)}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </View>
           );
         }}
@@ -409,9 +504,9 @@ function createStyles(theme: Theme) {
     monthNavLabel: { fontSize: 14, fontWeight: '700', color: theme.text, textTransform: 'capitalize' },
     donutWrap: { alignItems: 'center', marginBottom: 20 },
     row: { marginBottom: 18 },
-    rowHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-    category: { fontSize: 16, fontWeight: '600', color: theme.text },
-    amount: { fontSize: 16, fontWeight: '700', color: theme.text },
+    rowHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginBottom: 6 },
+    category: { fontSize: 16, fontWeight: '600', color: theme.text, flexShrink: 1 },
+    amount: { fontSize: 16, fontWeight: '700', color: theme.text, flexShrink: 0 },
     barTrack: {
       height: 10,
       backgroundColor: theme.surfaceAlt,
@@ -419,7 +514,28 @@ function createStyles(theme: Theme) {
       overflow: 'hidden',
     },
     barFill: { height: '100%', borderRadius: 5 },
-    pctText: { fontSize: 12, color: theme.textMuted, marginTop: 4 },
+    pctRow: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+    pctText: { fontSize: 12, color: theme.textMuted },
+    changeText: { fontSize: 12, fontWeight: '600', color: theme.textMuted, flexShrink: 1, textAlign: 'right' },
+    comparisonNote: { fontSize: 12, color: theme.textMuted, marginBottom: 12, textAlign: 'center' },
+    detailList: {
+      marginTop: 8,
+      backgroundColor: theme.surfaceAlt,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 8,
+    },
+    detailInfo: { flex: 1 },
+    detailDescription: { fontSize: 14, color: theme.text },
+    detailDate: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+    detailAmount: { fontSize: 14, fontWeight: '600', color: theme.text, flexShrink: 0 },
     emptyText: { textAlign: 'center', color: theme.textMuted, marginTop: 40 },
   });
 }

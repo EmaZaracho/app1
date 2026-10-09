@@ -17,6 +17,7 @@ function mov(overrides: Partial<Movement> = {}): Movement {
     sourceFundId: 1,
     destinationFundId: null,
     createdAt: '2026-08-05T10:00:00.000Z',
+    purchaseId: null,
     ...overrides,
   };
 }

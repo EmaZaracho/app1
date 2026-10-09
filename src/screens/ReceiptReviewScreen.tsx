@@ -12,7 +12,7 @@ import { FormScrollView } from '../components/FormScrollView';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { addMovements, getFundsWithBalances } from '../db/database';
+import { addMovements, addPurchase, getFundsWithBalances } from '../db/database';
 import { useDb } from '../db/useDb';
 import { computeFundSelection } from '../domain/movementRules';
 import { FundSelector, type SelectableFund } from '../components/FundSelector';
@@ -139,7 +139,9 @@ export default function ReceiptReviewScreen({ route, navigation }: Props) {
           destinationFundId: null,
         };
       });
-      await addMovements(db, movements);
+      // Más de un ítem se guarda como una compra de varios; uno solo, como gasto suelto.
+      if (movements.length > 1) await addPurchase(db, movements, merchantName);
+      else await addMovements(db, movements);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
     } catch (err) {

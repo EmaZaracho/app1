@@ -2,7 +2,7 @@ import { normalizeName } from '../domain/normalize';
 import { DEFAULT_FUND_COLOR, DEFAULT_FUND_ICON } from '../fundVisuals';
 import type { SqlDatabase } from './sqlDatabase';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 9;
 export const DEFAULT_FUND_NAME = 'Efectivo';
 
 const CREATE_FUNDS = `
@@ -30,6 +30,15 @@ const CREATE_FUND_ALIASES = `
   );
 `;
 
+// Una compra agrupa varios gastos cargados juntos (p. ej. al leer una factura).
+// Cada ítem sigue siendo un movimiento propio, enlazado por movements.purchase_id.
+const CREATE_PURCHASES = `
+  CREATE TABLE IF NOT EXISTS purchases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    merchant TEXT
+  );
+`;
+
 const CREATE_MOVEMENTS = `
   CREATE TABLE IF NOT EXISTS movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,6 +50,7 @@ const CREATE_MOVEMENTS = `
     source_fund_id INTEGER,
     destination_fund_id INTEGER,
     created_at TEXT NOT NULL,
+    purchase_id INTEGER REFERENCES purchases(id) ON DELETE SET NULL,
     FOREIGN KEY (source_fund_id) REFERENCES funds(id) ON DELETE RESTRICT,
     FOREIGN KEY (destination_fund_id) REFERENCES funds(id) ON DELETE RESTRICT,
     CHECK (
@@ -62,7 +72,9 @@ const CREATE_MOVEMENTS = `
 const CREATE_BUDGETS = `
   CREATE TABLE IF NOT EXISTS budgets (
     category TEXT PRIMARY KEY,
-    monthly_limit REAL NOT NULL
+    monthly_limit REAL NOT NULL,
+    period TEXT NOT NULL DEFAULT 'monthly',
+    anchor_date TEXT
   );
 `;
 
@@ -82,6 +94,14 @@ const CREATE_CATEGORY_FINANCIAL_SETTINGS = `
     category TEXT PRIMARY KEY,
     spending_priority TEXT NOT NULL CHECK (spending_priority IN ('essential','flexible','discretionary')),
     updated_at TEXT NOT NULL
+  );
+`;
+
+// Palabras que el usuario asocia a una categoría de gasto; se le informan a la IA al clasificar.
+const CREATE_CATEGORY_KEYWORDS = `
+  CREATE TABLE IF NOT EXISTS category_keywords (
+    keyword TEXT PRIMARY KEY,
+    category TEXT NOT NULL
   );
 `;
 
@@ -299,6 +319,18 @@ async function migrateOccurrencesAllowDeletedStatus(db: SqlDatabase): Promise<vo
   `);
 }
 
+/** Renombra una categoría de gasto en todas las tablas que la guardan (idempotente). */
+async function renameExpenseCategory(db: SqlDatabase, from: string, to: string): Promise<void> {
+  for (const table of ['movements', 'recurring_expense_rules', 'recurring_expense_occurrences']) {
+    await db.runAsync(`UPDATE ${table} SET category = ? WHERE category = ?`, [to, from]);
+  }
+  // Tablas con la categoría como clave: si ya existe la nueva, se conserva y se descarta la vieja.
+  for (const table of ['budgets', 'category_financial_settings']) {
+    await db.runAsync(`UPDATE OR IGNORE ${table} SET category = ? WHERE category = ?`, [to, from]);
+    await db.runAsync(`DELETE FROM ${table} WHERE category = ?`, [from]);
+  }
+}
+
 /**
  * Inicializa la base de datos: activa WAL y foreign_keys, crea el esquema,
  * corre las migraciones versionadas de forma idempotente y atómica, y asegura
@@ -316,15 +348,26 @@ export async function initDatabase(db: SqlDatabase): Promise<void> {
   await db.withTransactionAsync(async () => {
     await db.execAsync(CREATE_FUNDS);
     await db.execAsync(CREATE_FUND_ALIASES);
+    await db.execAsync(CREATE_PURCHASES);
     await db.execAsync(CREATE_MOVEMENTS);
     await db.execAsync(CREATE_BUDGETS);
     await db.execAsync(CREATE_FINANCIAL_PREFERENCES);
     await db.execAsync(CREATE_CATEGORY_FINANCIAL_SETTINGS);
+    await db.execAsync(CREATE_CATEGORY_KEYWORDS);
     await db.execAsync(CREATE_FINANCIAL_ADVICE_CACHE);
     await db.execAsync(CREATE_RECURRING_RULES);
 
     if (userVersion < 5 && !(await columnExists(db, 'financial_preferences', 'tracking_start_at'))) {
       await db.execAsync('ALTER TABLE financial_preferences ADD COLUMN tracking_start_at TEXT;');
+    }
+
+    if (userVersion < 6) {
+      if (!(await columnExists(db, 'budgets', 'period'))) {
+        await db.execAsync("ALTER TABLE budgets ADD COLUMN period TEXT NOT NULL DEFAULT 'monthly';");
+      }
+      if (!(await columnExists(db, 'budgets', 'anchor_date'))) {
+        await db.execAsync('ALTER TABLE budgets ADD COLUMN anchor_date TEXT;');
+      }
     }
 
     if (userVersion < 4 && (await tableExists(db, 'recurring_expense_occurrences'))) {
@@ -337,6 +380,16 @@ export async function initDatabase(db: SqlDatabase): Promise<void> {
 
     if (userVersion < 1 && (await tableExists(db, 'expenses'))) {
       await migrateLegacyExpenses(db, efectivoId);
+    }
+
+    if (userVersion < 9 && !(await columnExists(db, 'movements', 'purchase_id'))) {
+      await db.execAsync(
+        'ALTER TABLE movements ADD COLUMN purchase_id INTEGER REFERENCES purchases(id) ON DELETE SET NULL;'
+      );
+    }
+
+    if (userVersion < 7) {
+      await renameExpenseCategory(db, 'Entretenimiento', 'Ocio');
     }
 
     await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);

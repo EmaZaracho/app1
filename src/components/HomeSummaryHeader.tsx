@@ -7,7 +7,7 @@ import { formatCurrency } from '../utils/format';
 import { getBalanceVisibility } from '../services/balanceVisibility';
 import { useTheme, type Theme } from '../theme';
 import type { AIProvider } from '../types';
-import type { BudgetAlert } from '../db/database';
+import type { BudgetProgress } from '../db/database';
 
 /**
  * Alto de ventana (dp) debajo del cual Inicio abre con el resumen colapsado.
@@ -27,7 +27,7 @@ interface HomeSummaryHeaderProps {
   onTransfer: () => void;
   hasApiKey: boolean;
   activeProvider: AIProvider;
-  budgetAlerts: BudgetAlert[];
+  budgetAlerts: BudgetProgress[];
   onPressApiKey: () => void;
   onPressBudget: () => void;
 }

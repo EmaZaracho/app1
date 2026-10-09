@@ -11,7 +11,7 @@ export const DEFAULT_CATEGORY_PRIORITY: Record<ExpenseCategory, SpendingPriority
   Transporte: 'flexible',
   Otros: 'flexible',
   Compras: 'discretionary',
-  Entretenimiento: 'discretionary',
+  Ocio: 'discretionary',
 };
 
 interface Row {

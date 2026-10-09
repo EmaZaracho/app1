@@ -9,8 +9,8 @@ export interface TabConfigEntry {
 /** Las cuatro pestañas raíz, en el orden en que se muestran en la barra inferior. */
 export const MAIN_TABS: readonly TabConfigEntry[] = [
   { name: 'HomeTab', label: 'Inicio', icon: '🏠' },
-  { name: 'CalendarTab', label: 'Calendario', icon: '📅' },
   { name: 'SummaryTab', label: 'Resumen', icon: '📊' },
+  { name: 'CalendarTab', label: 'Calendario', icon: '📅' },
   { name: 'SettingsTab', label: 'Ajustes', icon: '⚙️' },
 ] as const;
 
@@ -24,6 +24,8 @@ export const ROOT_ONLY_SCREENS: readonly Exclude<keyof RootStackParamList, 'Main
   'Budgets',
   'FinancialInsights',
   'CategoryPrioritySettings',
+  'CategoryKeywords',
+  'PurchaseDetail',
   'RecurringExpenseEditor',
   'RecurringExpenseDetail',
   'RecurringOccurrenceDetail',

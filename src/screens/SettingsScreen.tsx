@@ -132,6 +132,11 @@ export default function SettingsScreen({ navigation }: Props) {
         <Text style={styles.fundsButtonChevron}>›</Text>
       </Pressable>
 
+      <Pressable style={styles.fundsButton} onPress={() => navigation.navigate('CategoryKeywords')}>
+        <Text style={styles.fundsButtonText}>🔤 Palabras clave de categorías</Text>
+        <Text style={styles.fundsButtonChevron}>›</Text>
+      </Pressable>
+
       <Pressable style={styles.fundsButton} onPress={() => navigation.navigate('Budgets')}>
         <Text style={styles.fundsButtonText}>💰 Administrar presupuestos</Text>
         <Text style={styles.fundsButtonChevron}>›</Text>

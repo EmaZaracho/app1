@@ -67,7 +67,7 @@ describe('migración recurring_expense_occurrences v3 -> v4 (status deleted)', (
     // de user_version 3 al esquema vigente sin perder datos.
     await initDatabase(db);
     const versionRow = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-    expect(versionRow?.user_version).toBe(5);
+    expect(versionRow?.user_version).toBe(9);
 
     const augAfter = await getOccurrenceById(db, augOcc.id);
     expect(augAfter?.storedStatus).toBe('paid');

@@ -2,7 +2,7 @@ import { MAIN_TABS, ROOT_ONLY_SCREENS } from '../src/navigation/navigationConfig
 
 describe('MAIN_TABS', () => {
   it('define exactamente las cuatro pestañas requeridas, en orden', () => {
-    expect(MAIN_TABS.map((t) => t.name)).toEqual(['HomeTab', 'CalendarTab', 'SummaryTab', 'SettingsTab']);
+    expect(MAIN_TABS.map((t) => t.name)).toEqual(['HomeTab', 'SummaryTab', 'CalendarTab', 'SettingsTab']);
   });
 
   it('usa etiquetas en español', () => {

@@ -1,3 +1,4 @@
+import type { BudgetPeriod } from './domain/budgetPeriod';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { ParsedReceipt } from './services/receiptTypes';
 import type { RecurringRuleInput } from './types/recurringExpenses';
@@ -6,7 +7,7 @@ export const EXPENSE_CATEGORIES = [
   'Comida',
   'Transporte',
   'Vivienda',
-  'Entretenimiento',
+  'Ocio',
   'Salud',
   'Compras',
   'Servicios',
@@ -97,6 +98,8 @@ export interface Movement {
   sourceFundId: number | null;
   destinationFundId: number | null;
   createdAt: string;
+  /** Compra de varios a la que pertenece (factura leída), o null si es un gasto suelto. */
+  purchaseId: number | null;
 }
 
 /** Datos de un movimiento listos para insertar (sin id ni fecha). */
@@ -112,7 +115,11 @@ export interface NewMovement {
 
 export interface Budget {
   category: ExpenseCategory;
-  monthlyLimit: number;
+  /** Límite de gasto por ciclo del período elegido (semanal, quincenal o mensual). */
+  limit: number;
+  period: BudgetPeriod;
+  /** Inicio (YYYY-MM-DD) de los ciclos semanales/quincenales; null en mensuales. */
+  anchorDate: string | null;
 }
 
 /** Filtro que una pantalla externa (p. ej. Análisis financiero) le pide a Home que aplique. */
@@ -147,6 +154,8 @@ export type RootStackParamList = {
   MovementDetail: { movementId: number };
   FinancialInsights: undefined;
   CategoryPrioritySettings: undefined;
+  CategoryKeywords: undefined;
+  PurchaseDetail: { purchaseId: number };
   ReceiptReview: { receipt: ParsedReceipt };
   RecurringExpenseEditor: { ruleId?: number; draft?: RecurringRuleInput } | undefined;
   RecurringExpenseDetail: { ruleId: number };

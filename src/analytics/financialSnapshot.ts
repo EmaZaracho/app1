@@ -90,7 +90,7 @@ export async function buildFinancialSnapshot(
     getPeriodActiveDays(db, period),
     getCategoryPriorities(db),
     getSavingsGoal(db),
-    isCurrentMonth ? getBudgets(db) : Promise.resolve([]),
+    isCurrentMonth ? getBudgets(db).then((all) => all.filter((b) => b.period === 'monthly')) : Promise.resolve([]),
   ]);
 
   const previousPeriodsAverage = {
@@ -112,7 +112,7 @@ export async function buildFinancialSnapshot(
   const dataQuality = computeDataQuality(activity.movementCount, activeDays, period.days);
 
   const priorityByCategory = new Map(priorities.map((p) => [p.category, p.priority]));
-  const budgetByCategory = new Map(budgets.map((b) => [b.category, b.monthlyLimit]));
+  const budgetByCategory = new Map(budgets.map((b) => [b.category, b.limit]));
   const previousTotalsByCategory = new Map(previousCategoryTotals.map((c) => [c.category, c.amount]));
 
   const savingsGoalStatus = computeSavingsGoalStatus(savingsGoalConfig, current.operationalSavings, current.income);
@@ -123,7 +123,7 @@ export async function buildFinancialSnapshot(
     amount: c.amount,
   }));
   const budgetsExceeded = budgets.some(
-    (b) => (categoryTotals.find((c) => c.category === b.category)?.amount ?? 0) > b.monthlyLimit
+    (b) => (categoryTotals.find((c) => c.category === b.category)?.amount ?? 0) > b.limit
   );
 
   const demanding = isDemandingMode({

@@ -18,7 +18,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
 import { getApiKey } from '../services/apiKey';
-import { deleteMovementAndUnlinkOccurrence } from '../recurring/recurringPayment';
+import { deleteMovementAndUnlinkOccurrence, deleteMovementsAndUnlinkOccurrences } from '../recurring/recurringPayment';
 import { useHomeData } from '../hooks/useHomeData';
 import { useMovementFilters } from '../hooks/useMovementFilters';
 import { useMovementComposer } from '../hooks/useMovementComposer';
@@ -101,6 +101,19 @@ export default function HomeScreen({ navigation, route }: Props) {
     await homeData.reload();
   }
 
+  /** Borra todos los ítems de una compra de varios; un solo "Deshacer" los restaura juntos. */
+  async function handleSwipeDeletePurchase(items: Movement[]) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const occurrenceIds = await deleteMovementsAndUnlinkOccurrences(
+      db,
+      items.map((item) => item.id)
+    );
+    undo.showUndoBannerForMany(
+      items.map((movement, i) => ({ movement, occurrenceId: occurrenceIds[i] ?? null }))
+    );
+    await homeData.reload();
+  }
+
   async function handleScanReceiptPress() {
     const geminiKey = await getApiKey('gemini');
     receiptScanner.startScan(geminiKey, () => {
@@ -163,6 +176,9 @@ export default function HomeScreen({ navigation, route }: Props) {
         fundNameById={fundNameById}
         onPressItem={(movementId) => navigation.navigate('MovementDetail', { movementId })}
         onSwipeDelete={handleSwipeDelete}
+        onSwipeDeletePurchase={handleSwipeDeletePurchase}
+        onEditPurchase={(purchaseId) => navigation.navigate('PurchaseDetail', { purchaseId })}
+        purchaseMerchants={homeData.purchaseMerchants}
         header={summaryHeader}
       />
 

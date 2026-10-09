@@ -14,6 +14,7 @@ export * from './fundsRepo';
 export * from './movementsRepo';
 export * from './summaryRepo';
 export * from './budgetsRepo';
+export * from './categoryKeywordsRepo';
 export * from './recurringExpenseRulesRepository';
 export * from './recurringExpenseOccurrencesRepository';
 export * from './recurringExpenseQueries';

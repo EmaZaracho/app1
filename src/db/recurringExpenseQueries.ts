@@ -103,11 +103,13 @@ export async function getBudgetProjections(
   monthKey: string,
   now: Date = new Date()
 ): Promise<BudgetProjection[]> {
-  const [budgets, spentTotals, occurrences] = await Promise.all([
+  const [allBudgets, spentTotals, occurrences] = await Promise.all([
     getBudgets(db),
     getCurrentMonthExpenseCategoryTotals(db),
     getOccurrencesForMonth(db, monthKey, now),
   ]);
+  // Las ocurrencias recurrentes son mensuales: solo se proyectan presupuestos mensuales.
+  const budgets = allBudgets.filter((b) => b.period === 'monthly');
   const spentByCategory = new Map(spentTotals.map((t) => [t.category, t.total]));
 
   const projectedByCategory = new Map<string, number>();
@@ -129,8 +131,8 @@ export async function getBudgetProjections(
       spent,
       projectedPending,
       possibleTotal,
-      budget: budget.monthlyLimit,
-      projectedOverBy: possibleTotal > budget.monthlyLimit ? round2(possibleTotal - budget.monthlyLimit) : 0,
+      budget: budget.limit,
+      projectedOverBy: possibleTotal > budget.limit ? round2(possibleTotal - budget.limit) : 0,
     };
   });
 }

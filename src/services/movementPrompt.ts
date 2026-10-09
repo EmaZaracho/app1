@@ -1,4 +1,5 @@
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../types';
+import type { CategoryKeyword } from '../db/categoryKeywordsRepo';
 import type { AIFundInfo } from './aiTypes';
 
 /** Schema de respuesta para Gemini, específico del flujo de interpretación de movimientos. */
@@ -28,11 +29,28 @@ function fundsBlock(funds: AIFundInfo[]): string {
 }
 
 /**
+ * Bloque con las palabras que el usuario asoció a cada categoría de gasto.
+ * Vacío si no definió ninguna, para no alterar el prompt.
+ */
+function keywordsBlock(keywords: CategoryKeyword[]): string {
+  if (keywords.length === 0) return '';
+  const byCategory = new Map<string, string[]>();
+  for (const { keyword, category } of keywords) {
+    byCategory.set(category, [...(byCategory.get(category) ?? []), keyword]);
+  }
+  const lines = [...byCategory].map(([category, words]) => `- ${category}: ${words.join(', ')}`);
+  return `
+Palabras clave del usuario (solo para gasto): si el texto menciona alguna de estas palabras, preferí la categoría indicada aunque otra parezca encajar.
+${lines.join('\n')}
+`;
+}
+
+/**
  * Construye dinámicamente el prompt del sistema incluyendo los fondos activos y
  * sus alias, para que la IA pueda identificar origen/destino. Las reglas son
  * compartidas por DeepSeek y Gemini (no se duplican por proveedor).
  */
-export function buildMovementPrompt(funds: AIFundInfo[]): string {
+export function buildMovementPrompt(funds: AIFundInfo[], keywords: CategoryKeyword[] = []): string {
   return `Eres un asistente que extrae datos de un movimiento de dinero a partir de una frase en lenguaje natural, en español o inglés. Todos los montos están en pesos argentinos (ARS).
 
 Responde EXCLUSIVAMENTE con un JSON de la forma:
@@ -55,7 +73,7 @@ Reglas de fondos:
 Reglas de categoría (solo para gasto e ingreso; en transferencia siempre null):
 - Si type es "gasto": una de ${EXPENSE_CATEGORIES.join(', ')}.
 - Si type es "ingreso": una de ${INCOME_CATEGORIES.join(', ')}.
-- Si ninguna encaja, usá "Otros".
+- Si ninguna encaja, usá "Otros".${keywordsBlock(keywords)}
 
 - "amount" es el monto numérico (sin símbolos), siempre positivo.
 - "description" es un resumen corto (máx. 6 palabras), en el idioma del texto original.

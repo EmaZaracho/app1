@@ -13,6 +13,8 @@ import FundsScreen from '../screens/FundsScreen';
 import FundEditorScreen from '../screens/FundEditorScreen';
 import FinancialInsightsScreen from '../screens/FinancialInsightsScreen';
 import CategoryPrioritySettingsScreen from '../screens/CategoryPrioritySettingsScreen';
+import CategoryKeywordsScreen from '../screens/CategoryKeywordsScreen';
+import PurchaseDetailScreen from '../screens/PurchaseDetailScreen';
 import ReceiptReviewScreen from '../screens/ReceiptReviewScreen';
 import FinancialCalendarScreen from '../screens/FinancialCalendarScreen';
 import RecurringExpenseEditorScreen from '../screens/RecurringExpenseEditorScreen';
@@ -70,21 +72,21 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="CalendarTab"
-        component={FinancialCalendarScreen}
-        options={{
-          title: TAB_SCREEN_TITLES.CalendarTab,
-          tabBarLabel: calendarTab.label,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>{calendarTab.icon}</Text>,
-        }}
-      />
-      <Tab.Screen
         name="SummaryTab"
         component={SummaryScreen}
         options={{
           title: TAB_SCREEN_TITLES.SummaryTab,
           tabBarLabel: summaryTab.label,
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>{summaryTab.icon}</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="CalendarTab"
+        component={FinancialCalendarScreen}
+        options={{
+          title: TAB_SCREEN_TITLES.CalendarTab,
+          tabBarLabel: calendarTab.label,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>{calendarTab.icon}</Text>,
         }}
       />
       <Tab.Screen
@@ -140,6 +142,16 @@ export default function AppNavigator() {
           name="CategoryPrioritySettings"
           component={CategoryPrioritySettingsScreen}
           options={{ title: 'Prioridad de categorías' }}
+        />
+        <Stack.Screen
+          name="CategoryKeywords"
+          component={CategoryKeywordsScreen}
+          options={{ title: 'Palabras clave' }}
+        />
+        <Stack.Screen
+          name="PurchaseDetail"
+          component={PurchaseDetailScreen}
+          options={{ title: 'Compra' }}
         />
         <Stack.Screen
           name="ReceiptReview"

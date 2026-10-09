@@ -11,7 +11,7 @@ import {
 import { FormScrollView } from '../components/FormScrollView';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { getMovementById, updateMovement } from '../db/movementsRepo';
+import { getMovementById, getPurchase, updateMovement } from '../db/movementsRepo';
 import { getFundById, getFundsWithBalances } from '../db/fundsRepo';
 import { deleteMovementAndUnlinkOccurrence } from '../recurring/recurringPayment';
 import { useDb } from '../db/useDb';
@@ -45,6 +45,7 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
   const [sourceFundId, setSourceFundId] = useState<number | null>(null);
   const [destinationFundId, setDestinationFundId] = useState<number | null>(null);
   const [funds, setFunds] = useState<SelectableFund[]>([]);
+  const [purchaseLabel, setPurchaseLabel] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const leavingRef = useRef(false);
@@ -62,6 +63,10 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
       setSourceFundId(found.sourceFundId);
       setDestinationFundId(found.destinationFundId);
       if (found.type !== 'ajuste') setType(found.type);
+      if (found.purchaseId != null) {
+        const purchase = await getPurchase(db, found.purchaseId);
+        setPurchaseLabel(purchase?.merchant?.trim() || 'Compra de varios');
+      }
 
       // Fondos seleccionables: activos + los referenciados por el movimiento (aunque estén archivados).
       const active = await getFundsWithBalances(db, false);
@@ -233,6 +238,15 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
 
   return (
     <FormScrollView style={styles.flex} contentContainerStyle={styles.container}>
+      {movement.purchaseId != null && purchaseLabel ? (
+        <Pressable
+          accessibilityRole="button"
+          style={styles.purchaseLink}
+          onPress={() => navigation.navigate('PurchaseDetail', { purchaseId: movement.purchaseId as number })}
+        >
+          <Text style={styles.purchaseLinkText}>🧾 Parte de la compra: {purchaseLabel} ›</Text>
+        </Pressable>
+      ) : null}
       {isAdjustment ? (
         <View style={styles.adjustBadge}>
           <Text style={styles.adjustBadgeText}>⚖️ Ajuste de saldo</Text>
@@ -338,6 +352,14 @@ function createStyles(theme: Theme) {
     flex: { flex: 1, backgroundColor: theme.bg },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg },
     container: { padding: 20, paddingBottom: 48 },
+    purchaseLink: {
+      backgroundColor: theme.surfaceAlt,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 16,
+    },
+    purchaseLinkText: { fontSize: 14, fontWeight: '600', color: theme.primary },
     adjustBadge: {
       backgroundColor: theme.surfaceAlt,
       borderRadius: 10,

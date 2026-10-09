@@ -119,6 +119,25 @@ export async function deleteMovementAndUnlinkOccurrence(
   return occurrenceId;
 }
 
+/**
+ * Elimina varios movimientos (p. ej. una compra de varios) en una sola
+ * transacción, desvinculando las ocurrencias que tuvieran asociadas. Devuelve
+ * el id de ocurrencia de cada movimiento (null si no tenía) para poder deshacer.
+ */
+export async function deleteMovementsAndUnlinkOccurrences(
+  db: SqlDatabase,
+  movementIds: number[]
+): Promise<(number | null)[]> {
+  const occurrenceIds: (number | null)[] = [];
+  await db.withTransactionAsync(async () => {
+    for (const movementId of movementIds) {
+      occurrenceIds.push(await unlinkOccurrenceForMovement(db, movementId));
+      await db.runAsync('DELETE FROM movements WHERE id = ?', [movementId]);
+    }
+  });
+  return occurrenceIds;
+}
+
 /** Re-vincula una ocurrencia con un movimiento restaurado (deshacer): status → paid. */
 export async function relinkOccurrence(
   db: SqlDatabase,
