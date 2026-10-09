@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import type * as NotificationsModule from 'expo-notifications';
 import type { SqlDatabase } from '../db/sqlDatabase';
 import { getRules } from '../db/recurringExpenseRulesRepository';
 import { getOccurrencesForMonth } from '../db/recurringExpenseOccurrencesRepository';
@@ -13,11 +14,31 @@ export { getRemindersEnabled, setRemindersEnabled } from './recurringReminderSet
 const REMINDER_CHANNEL_ID = 'recordatorios';
 
 /**
+ * expo-notifications falla al importarse dentro de Expo Go en Android (sus
+ * notificaciones push se quitaron de Expo Go). Por eso se carga recién cuando
+ * se necesita y nunca en ese entorno: allí los recordatorios quedan
+ * desactivados, y en builds reales (APK, development build) funcionan igual.
+ */
+const IS_ANDROID_EXPO_GO =
+  Platform.OS === 'android' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let notificationsModule: typeof NotificationsModule | null | undefined;
+
+function getNotifications(): typeof NotificationsModule | null {
+  if (notificationsModule === undefined) {
+    notificationsModule = IS_ANDROID_EXPO_GO ? null : require('expo-notifications');
+  }
+  return notificationsModule ?? null;
+}
+
+/**
  * Configura cómo se muestran las notificaciones: sin handler, expo-notifications
  * descarta las que llegan con la app en primer plano. En Android crea además
  * un canal propio con importancia alta para que aparezcan como banner.
  */
 export async function configureNotifications(): Promise<void> {
+  const Notifications = getNotifications();
+  if (!Notifications) return;
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -39,6 +60,8 @@ export async function configureNotifications(): Promise<void> {
  * recordatorios (nunca al iniciar la app). Devuelve si quedó concedido.
  */
 export async function requestReminderPermission(): Promise<boolean> {
+  const Notifications = getNotifications();
+  if (!Notifications) return false;
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
   const requested = await Notifications.requestPermissionsAsync();
@@ -46,6 +69,8 @@ export async function requestReminderPermission(): Promise<boolean> {
 }
 
 async function cancelAllRecurringReminders(): Promise<void> {
+  const Notifications = getNotifications();
+  if (!Notifications) return;
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   await Promise.all(
     scheduled
@@ -62,6 +87,8 @@ async function cancelAllRecurringReminders(): Promise<void> {
  * los recordatorios están desactivados, solo cancela.
  */
 export async function reconcileReminders(db: SqlDatabase, now: Date = new Date()): Promise<void> {
+  const Notifications = getNotifications();
+  if (!Notifications) return;
   await cancelAllRecurringReminders();
 
   const enabled = await getRemindersEnabled();
