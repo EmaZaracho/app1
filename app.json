@@ -2,18 +2,18 @@
   "expo": {
     "name": "GestorIA",
     "slug": "app1",
-    "version": "1.1.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.emazaracho.app1",
-      "buildNumber": "2"
+      "buildNumber": "4"
     },
     "android": {
       "package": "com.emazaracho.app1",
-      "versionCode": 2,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -36,7 +36,8 @@
           "cameraPermission": "Se usa para sacar una foto de un comprobante y registrar el gasto."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-status-bar"
     ],
     "runtimeVersion": {
       "policy": "appVersion"

@@ -5,17 +5,17 @@ const ROOT = path.resolve(__dirname, '..');
 const appJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'app.json'), 'utf8'));
 const easJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'eas.json'), 'utf8'));
 
-describe('app.json: versión pública 1.1.0', () => {
-  it('expo.version es 1.1.0', () => {
-    expect(appJson.expo.version).toBe('1.1.0');
+describe('app.json: versión pública 1.3.0', () => {
+  it('expo.version es 1.3.0', () => {
+    expect(appJson.expo.version).toBe('1.3.0');
   });
 
-  it('android.versionCode es 2', () => {
-    expect(appJson.expo.android.versionCode).toBe(2);
+  it('android.versionCode es 4', () => {
+    expect(appJson.expo.android.versionCode).toBe(4);
   });
 
-  it('ios.buildNumber es "2"', () => {
-    expect(appJson.expo.ios.buildNumber).toBe('2');
+  it('ios.buildNumber es "4"', () => {
+    expect(appJson.expo.ios.buildNumber).toBe('4');
   });
 
   it('runtimeVersion sigue usando la policy appVersion', () => {
@@ -51,8 +51,10 @@ describe('eas.json: versión pública bajo control manual', () => {
 });
 
 describe('CHANGELOG.md', () => {
-  it('existe y documenta 1.1.0', () => {
+  it('existe y documenta 1.3.0, 1.2.0 y 1.1.0', () => {
     const changelog = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
+    expect(changelog).toContain('## 1.3.0');
+    expect(changelog).toContain('## 1.2.0');
     expect(changelog).toContain('## 1.1.0');
     expect(changelog).toContain('## 1.0.0');
   });
