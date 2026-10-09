@@ -3,12 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -31,10 +29,6 @@ import { MovementPreview } from '../components/MovementPreview';
 import { UndoBanner } from '../components/UndoBanner';
 import { useTheme, type Theme } from '../theme';
 import type { MainTabParamList, Movement, RootStackParamList } from '../types';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'HomeTab'>,
