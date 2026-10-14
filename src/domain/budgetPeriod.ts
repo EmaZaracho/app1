@@ -4,21 +4,21 @@ export const BUDGET_PERIODS: BudgetPeriod[] = ['weekly', 'biweekly', 'monthly'];
 
 export const BUDGET_PERIOD_LABELS: Record<BudgetPeriod, string> = {
   weekly: 'Semanal',
-  biweekly: 'Quincenal',
+  biweekly: 'Bisemanal',
   monthly: 'Mensual',
 };
 
-/** Texto para frases tipo "gastado esta quincena" / "este mes". */
+/** Texto para frases tipo "gastado en estas 2 semanas" / "este mes". */
 export const BUDGET_PERIOD_CURRENT: Record<BudgetPeriod, string> = {
   weekly: 'esta semana',
-  biweekly: 'esta quincena',
+  biweekly: 'estas 2 semanas',
   monthly: 'este mes',
 };
 
 /** Duración en días de los ciclos que arrancan en una fecha de inicio. El mensual sigue el calendario. */
 const CYCLE_DAYS: Record<Exclude<BudgetPeriod, 'monthly'>, number> = {
   weekly: 7,
-  biweekly: 15,
+  biweekly: 14,
 };
 
 export interface BudgetRange {
@@ -45,7 +45,7 @@ function parseAnchorDate(anchor: string): Date | null {
 
 /**
  * Rango [inicio, fin) del ciclo de presupuesto que contiene a `now`. Los
- * mensuales siguen el mes calendario; los semanales y quincenales (7 y 15 días)
+ * mensuales siguen el mes calendario; los semanales y bisemanales (7 y 14 días)
  * repiten ciclos desde la fecha de inicio elegida. Sin ancla válida se usa el
  * día de `now` como inicio del ciclo.
  */

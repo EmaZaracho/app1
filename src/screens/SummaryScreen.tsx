@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDb } from '../db/useDb';
 import type { ExpenseCategory, Movement, RootStackParamList } from '../types';
-import { formatDayMonthYear } from '../domain/periodInput';
+import { formatDayMonthYear, maskDayMonthYear, parseDayMonthYear } from '../domain/periodInput';
+import { biweeklyRangeAt, DEFAULT_BIWEEKLY_ANCHOR, previousBiweeklyComparison } from '../domain/biweeklyCycle';
+import { toAnchorDate } from '../domain/budgetPeriod';
+import { getBiweeklyAnchor, setBiweeklyAnchor } from '../services/biweeklyAnchor';
 import { categoryChange, previousMonthComparison, type ComparisonPeriod } from '../domain/categoryChange';
 import {
   getExpenseCategoryTotals,
@@ -33,7 +36,13 @@ const DONUT_SIZE = (DONUT_RADIUS + DONUT_STROKE) * 2;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 const DONUT_GAP = 3;
 
-type Range = 'month' | 'all';
+type Range = 'month' | 'biweekly' | 'all';
+
+const CATEGORY_RANGE_OPTIONS: { label: string; value: Range }[] = [
+  { label: 'Mensual', value: 'month' },
+  { label: '2 semanas', value: 'biweekly' },
+  { label: 'Todo', value: 'all' },
+];
 
 const TREND_RANGE_OPTIONS: { label: string; value: TrendRange }[] = [
   { label: '6 meses', value: 6 },
@@ -106,6 +115,11 @@ export default function SummaryScreen() {
   const [range, setRange] = useState<Range>('month');
   const [trendRange, setTrendRange] = useState<TrendRange>(6);
   const [selectedMonthKey, setSelectedMonthKey] = useState(() => toMonthKey(new Date()));
+  const [biweeklyAnchor, setBiweeklyAnchorState] = useState(DEFAULT_BIWEEKLY_ANCHOR);
+  const [anchorText, setAnchorText] = useState('');
+  const [anchorError, setAnchorError] = useState(false);
+  // 0 = ciclo en curso, -1 = el anterior, etc.
+  const [cycleOffset, setCycleOffset] = useState(0);
   const [totals, setTotals] = useState<CategoryTotal[]>([]);
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([]);
   const [previousTotals, setPreviousTotals] = useState<Map<string, number> | null>(null);
@@ -116,11 +130,18 @@ export default function SummaryScreen() {
   const load = useCallback(async () => {
     const trackingStart = await getTrackingStart(db);
     // Solo el modo mensual compara; "Todo" no tiene un período anterior.
-    const nextComparison = range === 'month' ? previousMonthComparison(selectedMonthKey) : null;
+    const nextComparison =
+      range === 'month'
+        ? previousMonthComparison(selectedMonthKey)
+        : range === 'biweekly'
+          ? previousBiweeklyComparison(biweeklyAnchor, cycleOffset)
+          : null;
     const [categoryTotals, monthlyTrend, previous] = await Promise.all([
       range === 'month'
         ? getExpenseCategoryTotalsForMonth(db, selectedMonthKey, trackingStart)
-        : getExpenseCategoryTotals(db, trackingStart),
+        : range === 'biweekly'
+          ? getExpenseCategoryTotalsForRange(db, biweeklyRangeAt(biweeklyAnchor, cycleOffset), trackingStart)
+          : getExpenseCategoryTotals(db, trackingStart),
       getMonthlyTrend(db, trendRange, trackingStart),
       nextComparison
         ? getExpenseCategoryTotalsForRange(db, nextComparison.range, trackingStart)
@@ -130,7 +151,17 @@ export default function SummaryScreen() {
     setPreviousTotals(previous ? new Map(previous.map((t) => [t.category, t.total])) : null);
     setTotals(categoryTotals);
     setTrend(monthlyTrend);
-  }, [db, range, trendRange, selectedMonthKey]);
+  }, [db, range, trendRange, selectedMonthKey, biweeklyAnchor, cycleOffset]);
+
+  useEffect(() => {
+    const show = (anchor: string) => setAnchorText(formatDayMonthYear(new Date(`${anchor}T12:00:00`).toISOString()));
+    getBiweeklyAnchor()
+      .then((stored) => {
+        setBiweeklyAnchorState(stored);
+        show(stored);
+      })
+      .catch(() => show(DEFAULT_BIWEEKLY_ANCHOR));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -141,7 +172,7 @@ export default function SummaryScreen() {
   // Cambiar de mes o de rango deja de mostrar los gastos de la categoría abierta.
   useEffect(() => {
     setExpanded(null);
-  }, [range, selectedMonthKey]);
+  }, [range, selectedMonthKey, biweeklyAnchor, cycleOffset]);
 
   // Recarga los gastos de la categoría abierta cuando cambian los totales (p. ej. al volver de editar).
   useEffect(() => {
@@ -155,7 +186,11 @@ export default function SummaryScreen() {
       const movements = await getExpensesForCategory(
         db,
         expanded,
-        range === 'month' ? monthRange(selectedMonthKey) : null,
+        range === 'month'
+          ? monthRange(selectedMonthKey)
+          : range === 'biweekly'
+            ? biweeklyRangeAt(biweeklyAnchor, cycleOffset)
+            : null,
         trackingStart
       );
       if (!cancelled) setExpandedMovements(movements);
@@ -163,7 +198,7 @@ export default function SummaryScreen() {
     return () => {
       cancelled = true;
     };
-  }, [db, expanded, range, selectedMonthKey, totals]);
+  }, [db, expanded, range, selectedMonthKey, biweeklyAnchor, cycleOffset, totals]);
 
   const toggleCategory = useCallback((category: ExpenseCategory) => {
     setExpanded((current) => (current === category ? null : category));
@@ -177,6 +212,28 @@ export default function SummaryScreen() {
   }, []);
 
   const atCurrentMonth = selectedMonthKey === toMonthKey(new Date());
+
+  const goCycle = useCallback((delta: number) => {
+    setCycleOffset((offset) => Math.min(0, offset + delta));
+  }, []);
+
+  const handleAnchorChange = useCallback((value: string) => {
+    const masked = maskDayMonthYear(value);
+    setAnchorText(masked);
+    const parsed = parseDayMonthYear(masked);
+    setAnchorError(!parsed && masked.length >= 8);
+    if (!parsed) return;
+    const next = toAnchorDate(parsed);
+    setBiweeklyAnchorState(next);
+    setCycleOffset(0);
+    setBiweeklyAnchor(next).catch(() => {});
+  }, []);
+
+  const cycleRange = biweeklyRangeAt(biweeklyAnchor, cycleOffset);
+  const cycleLastDay = new Date(cycleRange.end);
+  cycleLastDay.setDate(cycleLastDay.getDate() - 1);
+  const cycleLabel = `${formatDayMonthYear(cycleRange.start)} – ${formatDayMonthYear(cycleLastDay.toISOString())}`;
+  const previousLabel = range === 'biweekly' ? 'ciclo anterior' : 'mes anterior';
 
   const grandTotal = totals.reduce((sum, t) => sum + t.total, 0);
   const maxTrendValue = Math.max(1, ...trend.flatMap((p) => [p.income, p.expense]));
@@ -283,12 +340,7 @@ export default function SummaryScreen() {
             <View style={themedStyles.sectionHeaderRow}>
               <Text style={themedStyles.sectionTitle}>Gastos por categoría</Text>
               <View style={themedStyles.rangeToggle}>
-                {(
-                  [
-                    { label: 'Mensual', value: 'month' as Range },
-                    { label: 'Todo', value: 'all' as Range },
-                  ] as const
-                ).map((opt) => (
+                {CATEGORY_RANGE_OPTIONS.map((opt) => (
                   <Text
                     key={opt.value}
                     onPress={() => setRange(opt.value)}
@@ -319,9 +371,41 @@ export default function SummaryScreen() {
               </View>
             ) : null}
 
+            {range === 'biweekly' ? (
+              <View>
+                <View style={themedStyles.monthNav}>
+                  <Pressable onPress={() => goCycle(-1)} hitSlop={12}>
+                    <Text style={themedStyles.monthArrow}>‹</Text>
+                  </Pressable>
+                  <Text style={themedStyles.monthNavLabel}>{cycleLabel}</Text>
+                  <Pressable onPress={() => goCycle(1)} hitSlop={12} disabled={cycleOffset === 0}>
+                    <Text
+                      style={[themedStyles.monthArrow, cycleOffset === 0 && themedStyles.monthArrowDisabled]}
+                    >
+                      ›
+                    </Text>
+                  </Pressable>
+                </View>
+                <View style={themedStyles.anchorRow}>
+                  <Text style={themedStyles.anchorLabel}>Los ciclos arrancan el</Text>
+                  <TextInput
+                    style={[themedStyles.anchorInput, anchorError && { borderColor: theme.danger }]}
+                    value={anchorText}
+                    onChangeText={handleAnchorChange}
+                    keyboardType="number-pad"
+                    placeholder="dd/mm/aa"
+                    placeholderTextColor={theme.textMuted}
+                    maxLength={8}
+                  />
+                </View>
+              </View>
+            ) : null}
+
             {comparison?.partial ? (
               <Text style={themedStyles.comparisonNote}>
-                Se compara con los primeros {comparison.days} días del mes anterior.
+                {range === 'biweekly'
+                  ? `Se compara con los primeros ${comparison.days} días del ciclo anterior.`
+                  : `Se compara con los primeros ${comparison.days} días del mes anterior.`}
               </Text>
             ) : null}
 
@@ -366,12 +450,12 @@ export default function SummaryScreen() {
                       ]}
                     >
                       {change.kind === 'up'
-                        ? `▲ ${change.percent}% vs. mes anterior`
+                        ? `▲ ${change.percent}% vs. ${previousLabel}`
                         : change.kind === 'down'
-                          ? `▼ ${change.percent}% vs. mes anterior`
+                          ? `▼ ${change.percent}% vs. ${previousLabel}`
                           : change.kind === 'new'
-                            ? 'Sin gasto el mes anterior'
-                            : 'Igual que el mes anterior'}
+                            ? `Sin gasto en el ${previousLabel}`
+                            : `Igual que el ${previousLabel}`}
                     </Text>
                   ) : null}
                 </View>
@@ -400,7 +484,9 @@ export default function SummaryScreen() {
               ? atCurrentMonth
                 ? 'Todavía no hay gastos este mes.'
                 : `Todavía no hay gastos en ${monthLabel(selectedMonthKey)}.`
-              : 'Todavía no hay gastos para resumir.'}
+              : range === 'biweekly'
+                ? `Todavía no hay gastos del ${cycleLabel}.`
+                : 'Todavía no hay gastos para resumir.'}
           </Text>
         }
       />
@@ -502,6 +588,19 @@ function createStyles(theme: Theme) {
     monthArrow: { fontSize: 22, color: theme.primary, fontWeight: '700', paddingHorizontal: 12 },
     monthArrowDisabled: { color: theme.textMuted, opacity: 0.4 },
     monthNavLabel: { fontSize: 14, fontWeight: '700', color: theme.text, textTransform: 'capitalize' },
+    anchorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 },
+    anchorLabel: { fontSize: 12, color: theme.textMuted },
+    anchorInput: {
+      fontSize: 13,
+      color: theme.text,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      minWidth: 84,
+      textAlign: 'center',
+    },
     donutWrap: { alignItems: 'center', marginBottom: 20 },
     row: { marginBottom: 18 },
     rowHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginBottom: 6 },

@@ -14,11 +14,17 @@ describe('budgetRange', () => {
     });
   });
 
-  it('quincenal repite ciclos de 15 días desde la fecha de inicio', () => {
+  it('bisemanal repite ciclos de 14 días desde la fecha de inicio', () => {
     const anchor = '2026-09-03';
-    expect(budgetRange('biweekly', anchor, new Date(2026, 8, 3))).toEqual({ start: day(2026, 9, 3), end: day(2026, 9, 18) });
-    expect(budgetRange('biweekly', anchor, new Date(2026, 8, 17))).toEqual({ start: day(2026, 9, 3), end: day(2026, 9, 18) });
-    expect(budgetRange('biweekly', anchor, new Date(2026, 8, 18))).toEqual({ start: day(2026, 9, 18), end: day(2026, 10, 3) });
+    expect(budgetRange('biweekly', anchor, new Date(2026, 8, 3))).toEqual({ start: day(2026, 9, 3), end: day(2026, 9, 17) });
+    expect(budgetRange('biweekly', anchor, new Date(2026, 8, 16))).toEqual({ start: day(2026, 9, 3), end: day(2026, 9, 17) });
+    expect(budgetRange('biweekly', anchor, new Date(2026, 8, 17))).toEqual({ start: day(2026, 9, 17), end: day(2026, 10, 1) });
+  });
+
+  it('bisemanal anclado en domingo va de domingo 00:00 a sábado 23:59', () => {
+    // dom 11/10 → sáb 24/10 (fin exclusivo: dom 25/10 00:00)
+    expect(budgetRange('biweekly', '2026-10-11', new Date(2026, 9, 24, 23, 59))).toEqual({ start: day(2026, 10, 11), end: day(2026, 10, 25) });
+    expect(budgetRange('biweekly', '2026-10-11', new Date(2026, 9, 25))).toEqual({ start: day(2026, 10, 25), end: day(2026, 11, 8) });
   });
 
   it('semanal repite ciclos de 7 días y también hacia atrás desde el ancla', () => {
@@ -47,21 +53,21 @@ describe('presupuestos con período', () => {
     expect((await getBudgets(db))[0]).toMatchObject({ period: 'monthly', anchorDate: null });
   });
 
-  it('la alerta quincenal solo cuenta gastos del ciclo actual', async () => {
+  it('la alerta bisemanal solo cuenta gastos del ciclo actual', async () => {
     const db = await freshDb();
     const efectivo = (await getFunds(db, false))[0].id;
-    await setBudget(db, 'Comida', 50, 'biweekly', '2026-09-16');
+    await setBudget(db, 'Comida', 50, 'biweekly', '2026-09-14');
     const gasto = (amount: number) =>
       addMovement(db, { type: 'gasto', amount, category: 'Comida', description: 'x', rawText: 'x', sourceFundId: efectivo, destinationFundId: null });
-    const previo = await gasto(80); // ciclo anterior (01/09–15/09)
-    const actual = await gasto(40); // ciclo actual (16/09–30/09)
+    const previo = await gasto(80); // ciclo anterior (31/08–13/09)
+    const actual = await gasto(40); // ciclo actual (14/09–27/09)
     await db.runAsync('UPDATE movements SET created_at = ? WHERE id = ?', [new Date(2026, 8, 10, 12).toISOString(), previo.id]);
     await db.runAsync('UPDATE movements SET created_at = ? WHERE id = ?', [new Date(2026, 8, 20, 12).toISOString(), actual.id]);
 
     const now = new Date(2026, 8, 25);
     expect(await getBudgetAlerts(db, null, now)).toHaveLength(0);
 
-    await setBudget(db, 'Comida', 30, 'biweekly', '2026-09-16');
+    await setBudget(db, 'Comida', 30, 'biweekly', '2026-09-14');
     expect(await getBudgetAlerts(db, null, now)).toEqual([
       { category: 'Comida', spent: 40, limit: 30, period: 'biweekly' },
     ]);

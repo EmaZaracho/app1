@@ -115,10 +115,10 @@ export interface NewMovement {
 
 export interface Budget {
   category: ExpenseCategory;
-  /** Límite de gasto por ciclo del período elegido (semanal, quincenal o mensual). */
+  /** Límite de gasto por ciclo del período elegido (semanal, bisemanal o mensual). */
   limit: number;
   period: BudgetPeriod;
-  /** Inicio (YYYY-MM-DD) de los ciclos semanales/quincenales; null en mensuales. */
+  /** Inicio (YYYY-MM-DD) de los ciclos semanales/bisemanales; null en mensuales. */
   anchorDate: string | null;
 }
 

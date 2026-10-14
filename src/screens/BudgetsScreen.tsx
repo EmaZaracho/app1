@@ -115,8 +115,8 @@ export default function BudgetsScreen() {
     <View style={styles.container}>
       <FormScrollView style={styles.container} contentContainerStyle={styles.listContent}>
         <Text style={styles.intro}>
-          Definí un límite por categoría, semanal, quincenal o mensual. Los ciclos semanales (7 días) y
-          quincenales (15 días) arrancan en la fecha que elijas. Cuando se supere, lo vas a ver marcado
+          Definí un límite por categoría, semanal, bisemanal o mensual. Los ciclos semanales (7 días) y
+          bisemanales (14 días) arrancan en la fecha que elijas. Cuando se supere, lo vas a ver marcado
           acá y en el resumen.
         </Text>
         {EXPENSE_CATEGORIES.map((category) => {
