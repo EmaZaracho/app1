@@ -21,10 +21,7 @@ interface HomeSummaryHeaderProps {
   activeIndex: number;
   onIndexChange: (index: number) => void;
   onAddFund: () => void;
-  onRegisterAI: () => void;
   onRegisterManual: () => void;
-  onScanReceipt: () => void;
-  onTransfer: () => void;
   hasApiKey: boolean;
   activeProvider: AIProvider;
   budgetAlerts: BudgetProgress[];
@@ -42,10 +39,7 @@ export function HomeSummaryHeader({
   activeIndex,
   onIndexChange,
   onAddFund,
-  onRegisterAI,
   onRegisterManual,
-  onScanReceipt,
-  onTransfer,
   hasApiKey,
   activeProvider,
   budgetAlerts,
@@ -99,10 +93,7 @@ export function HomeSummaryHeader({
           />
         ) : null}
         <HomeActionMenu
-          onRegisterAI={onRegisterAI}
           onRegisterManual={onRegisterManual}
-          onScanReceipt={onScanReceipt}
-          onTransfer={onTransfer}
         />
         <HomeAlerts
           hasApiKey={hasApiKey}

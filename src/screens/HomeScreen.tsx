@@ -136,10 +136,7 @@ export default function HomeScreen({ navigation, route }: Props) {
       activeIndex={Math.min(homeData.activeIndex, Math.max(homeData.slides.length - 1, 0))}
       onIndexChange={homeData.selectSlide}
       onAddFund={() => navigation.navigate('FundEditor', undefined)}
-      onRegisterAI={() => aiInputRef.current?.focus()}
       onRegisterManual={() => navigation.navigate('MovementForm', { initialType: 'gasto' })}
-      onScanReceipt={handleScanReceiptPress}
-      onTransfer={() => navigation.navigate('MovementForm', { initialType: 'transferencia' })}
       hasApiKey={composer.hasApiKey}
       activeProvider={composer.activeProvider}
       budgetAlerts={homeData.budgetAlerts}

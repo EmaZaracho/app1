@@ -1,37 +1,24 @@
 import React, { useMemo } from 'react';
-import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import { useTheme, type Theme } from '../theme';
 
 interface HomeActionMenuProps {
-  onRegisterAI: () => void;
   onRegisterManual: () => void;
-  onScanReceipt: () => void;
-  onTransfer: () => void;
 }
 
 /**
- * Única acción principal de Inicio para registrar operaciones. Usa `Alert`
- * (componente nativo) en vez de una librería de action sheet para mantener
- * la dependencia liviana.
+ * Acción principal de Inicio: abre directo el formulario manual. El registro
+ * con IA y el escaneo viven en la barra de texto de abajo, y la transferencia
+ * se elige en el selector de tipo del propio formulario.
  */
-export function HomeActionMenu({ onRegisterAI, onRegisterManual, onScanReceipt, onTransfer }: HomeActionMenuProps) {
+export function HomeActionMenu({ onRegisterManual }: HomeActionMenuProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-
-  function openMenu() {
-    Alert.alert('Registrar', '¿Qué querés hacer?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Registrar con IA', onPress: onRegisterAI },
-      { text: 'Registrar manualmente', onPress: onRegisterManual },
-      { text: 'Escanear comprobante', onPress: onScanReceipt },
-      { text: 'Transferir entre fondos', onPress: onTransfer },
-    ]);
-  }
 
   return (
     <Pressable
       style={styles.button}
-      onPress={openMenu}
+      onPress={onRegisterManual}
       accessibilityRole="button"
       accessibilityLabel="Registrar"
     >
