@@ -13,6 +13,7 @@ import {
 import { iconForCategory } from '../categoryVisuals';
 import { useTheme, type Theme } from '../theme';
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from '../types';
+import { CHIP_HIT_SLOP } from '../components/touchTargets';
 
 export default function CategoryKeywordsScreen() {
   const theme = useTheme();
@@ -70,6 +71,7 @@ export default function CategoryKeywordsScreen() {
                       key={k.keyword}
                       accessibilityRole="button"
                       accessibilityLabel={`Quitar ${k.keyword}`}
+                      hitSlop={CHIP_HIT_SLOP}
                       style={styles.chip}
                       onPress={() => handleRemove(k.keyword)}
                     >
@@ -119,6 +121,8 @@ function createStyles(theme: Theme) {
     category: { fontSize: 16, fontWeight: '600', color: theme.text, marginBottom: 8 },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
     chip: {
+      minHeight: 36,
+      justifyContent: 'center',
       backgroundColor: theme.chipSelectedBg,
       borderRadius: 18,
       paddingHorizontal: 14,

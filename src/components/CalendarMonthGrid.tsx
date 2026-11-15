@@ -75,7 +75,7 @@ export function CalendarMonthGrid({
     <View>
       <View style={styles.weekRow}>
         {WEEKDAYS.map((wd) => (
-          <Text key={wd} style={styles.weekday}>
+          <Text key={wd} maxFontSizeMultiplier={1.2} style={styles.weekday}>
             {wd}
           </Text>
         ))}

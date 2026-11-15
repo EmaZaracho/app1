@@ -1,21 +1,23 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme, type Theme } from '../theme';
+import { ARROW_HIT_SLOP } from './touchTargets';
 
 interface UndoBannerProps {
   visible: boolean;
   onUndo: () => void;
+  message?: string;
 }
 
-export function UndoBanner({ visible, onUndo }: UndoBannerProps) {
+export function UndoBanner({ visible, onUndo, message = 'Movimiento eliminado.' }: UndoBannerProps) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   if (!visible) return null;
 
   return (
     <View style={styles.undoBanner}>
-      <Text style={styles.undoText}>Movimiento eliminado.</Text>
-      <Pressable onPress={onUndo}>
+      <Text style={styles.undoText}>{message}</Text>
+      <Pressable onPress={onUndo} hitSlop={ARROW_HIT_SLOP} accessibilityRole="button">
         <Text style={styles.undoButtonText}>Deshacer</Text>
       </Pressable>
     </View>

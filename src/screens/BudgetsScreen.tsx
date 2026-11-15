@@ -17,6 +17,7 @@ import {
   type BudgetPeriod,
 } from '../domain/budgetPeriod';
 import { formatDayMonthYear, maskDayMonthYear, parseDayMonthYear } from '../domain/periodInput';
+import { CHIP_HIT_SLOP } from '../components/touchTargets';
 
 interface RowSettings {
   limit: string;
@@ -159,6 +160,7 @@ export default function BudgetsScreen() {
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
                       onPress={() => selectPeriod(category, period)}
+                      hitSlop={CHIP_HIT_SLOP}
                       style={[styles.periodChip, selected && styles.periodChipSelected]}
                     >
                       <Text style={[styles.periodChipText, selected && styles.periodChipTextSelected]}>
@@ -250,6 +252,8 @@ function createStyles(theme: Theme) {
     },
     periodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
     periodChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       backgroundColor: theme.bg,

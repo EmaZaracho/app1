@@ -183,7 +183,12 @@ export default function FundEditorScreen({ route, navigation }: Props) {
             placeholderTextColor={theme.textMuted}
             autoCapitalize="none"
           />
-          <Pressable style={styles.aliasRemove} onPress={() => removeAlias(i)}>
+          <Pressable
+            style={styles.aliasRemove}
+            onPress={() => removeAlias(i)}
+            accessibilityRole="button"
+            accessibilityLabel={`Quitar alias ${alias || i + 1}`}
+          >
             <Text style={styles.aliasRemoveText}>✕</Text>
           </Pressable>
         </View>

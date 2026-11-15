@@ -9,6 +9,7 @@ import {
   formatDayMonthYear,
   maskDayMonthYear,
 } from '../domain/periodInput';
+import { CHIP_HIT_SLOP } from './touchTargets';
 
 interface TypeOption {
   label: string;
@@ -111,6 +112,7 @@ export function MovementFilterBar({
         {TYPE_OPTIONS.map((opt) => (
           <Pressable
             key={opt.label}
+            hitSlop={CHIP_HIT_SLOP}
             style={[styles.typeChip, filterType === opt.value && styles.typeChipSelected]}
             onPress={() => onFilterTypeChange(opt.value)}
             accessibilityRole="button"
@@ -126,6 +128,7 @@ export function MovementFilterBar({
           </Pressable>
         ))}
         <Pressable
+          hitSlop={CHIP_HIT_SLOP}
           style={[styles.typeChip, periodChipSelected && styles.typeChipSelected]}
           onPress={periodEditorOpen ? () => setPeriodEditorOpen(false) : openPeriodEditor}
           accessibilityRole="button"
@@ -185,12 +188,12 @@ export function MovementFilterBar({
       ) : null}
 
       {filterPeriod && !periodEditorOpen ? (
-        <Pressable style={styles.advancedFilterChip} onPress={clearPeriod} accessibilityRole="button">
+        <Pressable hitSlop={CHIP_HIT_SLOP} style={styles.advancedFilterChip} onPress={clearPeriod} accessibilityRole="button">
           <Text style={styles.advancedFilterText}>Período {describePeriod(filterPeriod)} · Tocá para quitarlo ✕</Text>
         </Pressable>
       ) : null}
       {filterCategory ? (
-        <Pressable style={styles.advancedFilterChip} onPress={onClearCategory} accessibilityRole="button">
+        <Pressable hitSlop={CHIP_HIT_SLOP} style={styles.advancedFilterChip} onPress={onClearCategory} accessibilityRole="button">
           <Text style={styles.advancedFilterText}>Categoría "{filterCategory}" · Tocá para quitarla ✕</Text>
         </Pressable>
       ) : null}
@@ -223,6 +226,8 @@ function createStyles(theme: Theme) {
     typeFilterScroll: { flexGrow: 0, marginBottom: 10 },
     typeFilterRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingRight: 4 },
     advancedFilterChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       backgroundColor: theme.surfaceAlt,
       borderRadius: 10,
       paddingHorizontal: 12,
@@ -231,6 +236,8 @@ function createStyles(theme: Theme) {
     },
     advancedFilterText: { fontSize: 12, color: theme.primary, fontWeight: '600' },
     typeChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,

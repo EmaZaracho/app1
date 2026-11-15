@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme, type Theme } from '../theme';
 import type { AnalysisPeriodPreset } from '../types/financialAnalytics';
+import { CHIP_HIT_SLOP } from './touchTargets';
 
 const PRESETS: { value: AnalysisPeriodPreset; label: string }[] = [
   { value: 'current_month', label: 'Este mes' },
@@ -40,6 +41,9 @@ export function PeriodSelector({
         {PRESETS.map((p) => (
           <Pressable
             key={p.value}
+            hitSlop={CHIP_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityState={{ selected: preset === p.value }}
             style={[styles.chip, preset === p.value && styles.chipSelected]}
             onPress={() => onSelectPreset(p.value)}
           >
@@ -76,6 +80,8 @@ function createStyles(theme: Theme) {
   return StyleSheet.create({
     row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,

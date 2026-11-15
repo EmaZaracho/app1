@@ -8,6 +8,7 @@ import type { ExpenseCategory, Movement, RootStackParamList } from '../types';
 import { formatDayMonthYear, maskDayMonthYear, parseDayMonthYear } from '../domain/periodInput';
 import { biweeklyRangeAt, DEFAULT_BIWEEKLY_ANCHOR, previousBiweeklyComparison } from '../domain/biweeklyCycle';
 import { toAnchorDate } from '../domain/budgetPeriod';
+import { ARROW_HIT_SLOP, CHIP_HIT_SLOP } from '../components/touchTargets';
 import { getBiweeklyAnchor, setBiweeklyAnchor } from '../services/biweeklyAnchor';
 import { categoryChange, previousMonthComparison, type ComparisonPeriod } from '../domain/categoryChange';
 import {
@@ -114,6 +115,8 @@ export default function SummaryScreen() {
   const navigation = useNavigation<Nav>();
   const [range, setRange] = useState<Range>('month');
   const [trendRange, setTrendRange] = useState<TrendRange>(6);
+  // Mes del gráfico de tendencia cuyo detalle se muestra; null = el más reciente.
+  const [selectedTrendKey, setSelectedTrendKey] = useState<string | null>(null);
   const [selectedMonthKey, setSelectedMonthKey] = useState(() => toMonthKey(new Date()));
   const [biweeklyAnchor, setBiweeklyAnchorState] = useState(DEFAULT_BIWEEKLY_ANCHOR);
   const [anchorText, setAnchorText] = useState('');
@@ -238,6 +241,7 @@ export default function SummaryScreen() {
   const grandTotal = totals.reduce((sum, t) => sum + t.total, 0);
   const maxTrendValue = Math.max(1, ...trend.flatMap((p) => [p.income, p.expense]));
   const trendTotals = useMemo(() => sumMonthlyTrend(trend), [trend]);
+  const activeTrendPoint = trend.find((p) => p.monthKey === selectedTrendKey) ?? trend[trend.length - 1] ?? null;
 
   return (
     <View style={themedStyles.container}>
@@ -258,16 +262,26 @@ export default function SummaryScreen() {
               <Text style={themedStyles.sectionTitle}>{trendSectionTitle(trendRange)}</Text>
               <View style={themedStyles.rangeToggle}>
                 {TREND_RANGE_OPTIONS.map((opt) => (
-                  <Text
+                  <Pressable
                     key={String(opt.value)}
                     onPress={() => setTrendRange(opt.value)}
+                    hitSlop={CHIP_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: trendRange === opt.value }}
                     style={[
                       themedStyles.rangeChip,
                       trendRange === opt.value && themedStyles.rangeChipSelected,
                     ]}
                   >
-                    {opt.label}
-                  </Text>
+                    <Text
+                      style={[
+                        themedStyles.rangeChipText,
+                        trendRange === opt.value && themedStyles.rangeChipTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -288,7 +302,18 @@ export default function SummaryScreen() {
                 contentContainerStyle={themedStyles.trendChartContent}
               >
                 {trend.map((point) => (
-                  <View key={point.monthKey} style={themedStyles.trendColumn}>
+                  <Pressable
+                    key={point.monthKey}
+                    onPress={() => setSelectedTrendKey(point.monthKey)}
+                    hitSlop={CHIP_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: point.monthKey === activeTrendPoint?.monthKey }}
+                    accessibilityLabel={`${monthLabel(point.monthKey)}: ingresos ${formatCurrency(point.income)}, gastos ${formatCurrency(point.expense)}`}
+                    style={[
+                      themedStyles.trendColumn,
+                      point.monthKey === activeTrendPoint?.monthKey && themedStyles.trendColumnSelected,
+                    ]}
+                  >
                     <View style={themedStyles.trendBars}>
                       <View
                         style={[
@@ -306,9 +331,20 @@ export default function SummaryScreen() {
                       />
                     </View>
                     <Text style={themedStyles.trendLabel}>{point.monthLabel}</Text>
-                  </View>
+                  </Pressable>
                 ))}
               </ScrollView>
+            ) : null}
+
+            {activeTrendPoint ? (
+              <View style={themedStyles.trendDetail}>
+                <Text style={themedStyles.trendDetailTitle}>{monthLabel(activeTrendPoint.monthKey)}</Text>
+                <Text style={themedStyles.trendDetailValues}>
+                  <Text style={{ color: theme.success }}>Ingresos {formatCurrency(activeTrendPoint.income)}</Text>
+                  {'   '}
+                  <Text style={{ color: theme.danger }}>Gastos {formatCurrency(activeTrendPoint.expense)}</Text>
+                </Text>
+              </View>
             ) : null}
 
             <View style={themedStyles.trendTotalsRow}>
@@ -341,27 +377,37 @@ export default function SummaryScreen() {
               <Text style={themedStyles.sectionTitle}>Gastos por categoría</Text>
               <View style={themedStyles.rangeToggle}>
                 {CATEGORY_RANGE_OPTIONS.map((opt) => (
-                  <Text
+                  <Pressable
                     key={opt.value}
                     onPress={() => setRange(opt.value)}
+                    hitSlop={CHIP_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: range === opt.value }}
                     style={[
                       themedStyles.rangeChip,
                       range === opt.value && themedStyles.rangeChipSelected,
                     ]}
                   >
-                    {opt.label}
-                  </Text>
+                    <Text
+                      style={[
+                        themedStyles.rangeChipText,
+                        range === opt.value && themedStyles.rangeChipTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
                 ))}
               </View>
             </View>
 
             {range === 'month' ? (
               <View style={themedStyles.monthNav}>
-                <Pressable onPress={() => goMonth(-1)} hitSlop={12}>
+                <Pressable onPress={() => goMonth(-1)} hitSlop={ARROW_HIT_SLOP} accessibilityRole="button" accessibilityLabel="Mes anterior">
                   <Text style={themedStyles.monthArrow}>‹</Text>
                 </Pressable>
                 <Text style={themedStyles.monthNavLabel}>{monthLabel(selectedMonthKey)}</Text>
-                <Pressable onPress={() => goMonth(1)} hitSlop={12} disabled={atCurrentMonth}>
+                <Pressable onPress={() => goMonth(1)} hitSlop={ARROW_HIT_SLOP} disabled={atCurrentMonth} accessibilityRole="button" accessibilityLabel="Mes siguiente">
                   <Text
                     style={[themedStyles.monthArrow, atCurrentMonth && themedStyles.monthArrowDisabled]}
                   >
@@ -374,11 +420,11 @@ export default function SummaryScreen() {
             {range === 'biweekly' ? (
               <View>
                 <View style={themedStyles.monthNav}>
-                  <Pressable onPress={() => goCycle(-1)} hitSlop={12}>
+                  <Pressable onPress={() => goCycle(-1)} hitSlop={ARROW_HIT_SLOP} accessibilityRole="button" accessibilityLabel="Ciclo anterior">
                     <Text style={themedStyles.monthArrow}>‹</Text>
                   </Pressable>
                   <Text style={themedStyles.monthNavLabel}>{cycleLabel}</Text>
-                  <Pressable onPress={() => goCycle(1)} hitSlop={12} disabled={cycleOffset === 0}>
+                  <Pressable onPress={() => goCycle(1)} hitSlop={ARROW_HIT_SLOP} disabled={cycleOffset === 0} accessibilityRole="button" accessibilityLabel="Ciclo siguiente">
                     <Text
                       style={[themedStyles.monthArrow, cycleOffset === 0 && themedStyles.monthArrowDisabled]}
                     >
@@ -523,27 +569,28 @@ function createStyles(theme: Theme) {
     insightsButtonText: { color: theme.primaryText, fontWeight: '700', fontSize: 14 },
     sectionHeaderRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       justifyContent: 'space-between',
       alignItems: 'center',
+      columnGap: 12,
+      rowGap: 8,
       marginBottom: 12,
     },
-    rangeToggle: { flexDirection: 'row', gap: 6 },
+    rangeToggle: { flexDirection: 'row', flexShrink: 0, gap: 6 },
     rangeChip: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: theme.textSecondary,
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
-      borderRadius: 12,
+      borderRadius: 18,
       paddingHorizontal: 10,
-      paddingVertical: 4,
-      overflow: 'hidden',
     },
+    rangeChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
     rangeChipSelected: {
       backgroundColor: theme.chipSelectedBg,
       borderColor: theme.chipSelectedBg,
-      color: theme.chipSelectedText,
     },
+    rangeChipTextSelected: { color: theme.chipSelectedText },
     trendSection: { marginBottom: 12 },
     legendRow: { flexDirection: 'row', gap: 16, marginBottom: 12, marginTop: 12 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -556,9 +603,13 @@ function createStyles(theme: Theme) {
       alignItems: 'flex-end',
       gap: 14,
       paddingHorizontal: 4,
-      marginBottom: 24,
+      marginBottom: 8,
     },
-    trendColumn: { alignItems: 'center', minWidth: 34 },
+    trendColumn: { alignItems: 'center', minWidth: 40, paddingHorizontal: 4, paddingVertical: 4, borderRadius: 8 },
+    trendColumnSelected: { backgroundColor: theme.surfaceAlt },
+    trendDetail: { alignItems: 'center', marginBottom: 16 },
+    trendDetailTitle: { fontSize: 13, fontWeight: '700', color: theme.text },
+    trendDetailValues: { fontSize: 13, fontWeight: '600', marginTop: 2 },
     trendBars: {
       flexDirection: 'row',
       gap: 4,
@@ -587,7 +638,7 @@ function createStyles(theme: Theme) {
     },
     monthArrow: { fontSize: 22, color: theme.primary, fontWeight: '700', paddingHorizontal: 12 },
     monthArrowDisabled: { color: theme.textMuted, opacity: 0.4 },
-    monthNavLabel: { fontSize: 14, fontWeight: '700', color: theme.text, textTransform: 'capitalize' },
+    monthNavLabel: { fontSize: 14, fontWeight: '700', color: theme.text },
     anchorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 },
     anchorLabel: { fontSize: 12, color: theme.textMuted },
     anchorInput: {

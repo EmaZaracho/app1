@@ -25,6 +25,7 @@ import {
   type NewMovement,
   type RootStackParamList,
 } from '../types';
+import { CHIP_HIT_SLOP } from '../components/touchTargets';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MovementDetail'>;
 
@@ -258,6 +259,9 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
             {(['gasto', 'ingreso', 'transferencia'] as const).map((t) => (
               <Pressable
                 key={t}
+                hitSlop={CHIP_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityState={{ selected: type === t }}
                 style={[styles.typeChip, type === t && styles.typeChipSelected]}
                 onPress={() => handleSelectType(t)}
               >
@@ -285,6 +289,9 @@ export default function MovementDetailScreen({ route, navigation }: Props) {
             {categoriesForType(type as 'gasto' | 'ingreso').map((cat) => (
               <Pressable
                 key={cat}
+                hitSlop={CHIP_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityState={{ selected: cat === category }}
                 style={[styles.categoryChip, cat === category && styles.categoryChipSelected]}
                 onPress={() => setCategory(cat)}
               >
@@ -381,6 +388,8 @@ function createStyles(theme: Theme) {
     },
     typeRow: { flexDirection: 'row', gap: 8 },
     typeChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,
@@ -392,6 +401,8 @@ function createStyles(theme: Theme) {
     typeChipTextSelected: { color: theme.chipSelectedText },
     categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     categoryChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,

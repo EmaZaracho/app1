@@ -36,16 +36,19 @@ export function CalendarDayCell({ data, isToday, isSelected, onPress }: Calendar
         isToday && !isSelected && styles.cellToday,
       ]}
       onPress={() => onPress(data.dateStr)}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      accessibilityLabel={`Día ${data.day}${data.statuses.length > 0 ? `, ${data.statuses.length} pagos` : ''}${data.knownTotal > 0 ? `, ${formatCurrency(data.knownTotal)}` : ''}`}
     >
-      <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>{data.day}</Text>
+      <Text maxFontSizeMultiplier={1.2} style={[styles.dayNumber, isToday && styles.dayNumberToday]}>{data.day}</Text>
       <View style={styles.dotsRow}>
         {dots.map((s, i) => (
           <View key={i} style={[styles.dot, { backgroundColor: statusColor(s, theme) }]} />
         ))}
-        {extra > 0 ? <Text style={styles.extra}>+{extra}</Text> : null}
+        {extra > 0 ? <Text maxFontSizeMultiplier={1.2} style={styles.extra}>+{extra}</Text> : null}
       </View>
       {data.knownTotal > 0 ? (
-        <Text style={styles.amount} numberOfLines={1}>
+        <Text maxFontSizeMultiplier={1.2} style={styles.amount} numberOfLines={1}>
           {formatCurrency(data.knownTotal)}
         </Text>
       ) : null}

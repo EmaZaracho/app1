@@ -5,6 +5,7 @@ import { FundSelector, type SelectableFund } from './FundSelector';
 import { CATEGORY_ICON } from '../categoryVisuals';
 import { categoriesForType, type AIMovementType } from '../types';
 import type { MovementFormState } from '../hooks/useMovementForm';
+import { CHIP_HIT_SLOP } from './touchTargets';
 
 const TYPE_LABEL: Record<AIMovementType, string> = {
   gasto: 'Gasto',
@@ -43,6 +44,9 @@ export function MovementFormFields({ form, funds }: MovementFormFieldsProps) {
           (['gasto', 'ingreso', 'transferencia'] as const).map((t) => (
             <Pressable
               key={t}
+              hitSlop={CHIP_HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityState={{ selected: form.type === t }}
               style={[styles.typeChip, form.type === t && styles.typeChipSelected]}
               onPress={() => form.setType(t)}
             >
@@ -58,6 +62,7 @@ export function MovementFormFields({ form, funds }: MovementFormFieldsProps) {
           onChangeText={form.setAmountText}
           keyboardType="decimal-pad"
           placeholder="Monto"
+          accessibilityLabel="Monto"
           placeholderTextColor={theme.textMuted}
         />
       </View>
@@ -67,6 +72,9 @@ export function MovementFormFields({ form, funds }: MovementFormFieldsProps) {
           {categoriesForType(form.type as 'gasto' | 'ingreso').map((cat) => (
             <Pressable
               key={cat}
+              hitSlop={CHIP_HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityState={{ selected: form.category === cat }}
               style={[styles.categoryChip, form.category === cat && styles.categoryChipSelected]}
               onPress={() => form.setCategory(cat)}
             >
@@ -109,6 +117,7 @@ export function MovementFormFields({ form, funds }: MovementFormFieldsProps) {
         value={form.description}
         onChangeText={form.setDescription}
         placeholder="Descripción"
+        accessibilityLabel="Descripción"
         placeholderTextColor={theme.textMuted}
       />
     </View>
@@ -119,6 +128,8 @@ function createStyles(theme: Theme) {
   return StyleSheet.create({
     typeRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' },
     typeChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,
@@ -151,6 +162,8 @@ function createStyles(theme: Theme) {
     },
     categoryRow: { gap: 8, paddingBottom: 8 },
     categoryChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,

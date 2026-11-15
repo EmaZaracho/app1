@@ -4,6 +4,7 @@ import { useTheme, type Theme } from '../theme';
 import { formatCurrency } from '../utils/format';
 import { validateSavingsGoalValue } from '../domain/savingsGoalRules';
 import type { SavingsGoal, SavingsGoalMode, SavingsGoalStatus } from '../types/financialAnalytics';
+import { CHIP_HIT_SLOP } from './touchTargets';
 
 interface SavingsGoalCardProps {
   goal: SavingsGoal;
@@ -98,6 +99,9 @@ export function SavingsGoalCard({ goal, status, onSave }: SavingsGoalCardProps) 
             ).map((opt) => (
               <Pressable
                 key={opt.value}
+                hitSlop={CHIP_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityState={{ selected: mode === opt.value }}
                 style={[styles.modeChip, mode === opt.value && styles.modeChipSelected]}
                 onPress={() => setMode(opt.value)}
               >
@@ -148,6 +152,8 @@ function createStyles(theme: Theme) {
     barFill: { height: '100%', borderRadius: 4 },
     modeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
     modeChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,

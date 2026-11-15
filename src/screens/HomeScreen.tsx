@@ -205,12 +205,15 @@ export default function HomeScreen({ navigation, route }: Props) {
               value={composer.text}
               onChangeText={composer.setText}
               onSubmitEditing={composer.handleParse}
+              accessibilityLabel="Registrar un movimiento escribiendo, por ejemplo: pagué 20 de nafta con MP"
               editable={!composer.loading}
               returnKeyType="send"
             />
             <Pressable
               style={[styles.photoButton, receiptScanner.scanning && styles.buttonDisabled]}
               onPress={handleScanReceiptPress}
+              accessibilityRole="button"
+              accessibilityLabel="Escanear comprobante con la cámara"
               disabled={receiptScanner.scanning || composer.loading}
             >
               {receiptScanner.scanning ? (
@@ -222,6 +225,7 @@ export default function HomeScreen({ navigation, route }: Props) {
             <Pressable
               style={[styles.addButton, composer.loading && styles.buttonDisabled]}
               onPress={composer.handleParse}
+              accessibilityRole="button"
               disabled={composer.loading}
             >
               {composer.loading ? (

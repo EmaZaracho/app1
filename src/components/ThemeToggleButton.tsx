@@ -6,7 +6,13 @@ import { useThemeControls } from '../theme';
 export function ThemeToggleButton() {
   const { resolved, toggle } = useThemeControls();
   return (
-    <Pressable onPress={toggle} hitSlop={12} style={styles.button}>
+    <Pressable
+      onPress={toggle}
+      hitSlop={12}
+      style={styles.button}
+      accessibilityRole="button"
+      accessibilityLabel={resolved === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+    >
       <Text style={styles.icon}>{resolved === 'dark' ? '☀️' : '🌙'}</Text>
     </Pressable>
   );

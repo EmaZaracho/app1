@@ -41,6 +41,7 @@ import type {
   RecurringExpenseRule,
 } from '../types/recurringExpenses';
 import type { RootStackParamList } from '../types';
+import { ARROW_HIT_SLOP } from '../components/touchTargets';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'calendar' | 'agenda';
@@ -53,6 +54,13 @@ interface MonthData {
   ruleNames: Map<number, string>;
   fundNames: Map<number, string>;
   payments: Map<number, OccurrencePaymentInfo>;
+}
+
+/** "2026-11-15" → "Domingo 15 de noviembre". */
+function formatLongDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const text = new Date(y, m - 1, d).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export default function FinancialCalendarScreen() {
@@ -158,6 +166,8 @@ export default function FinancialCalendarScreen() {
             key={m}
             style={[styles.segmentButton, view === m && styles.segmentActive]}
             onPress={() => setView(m)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: view === m }}
           >
             <Text style={[styles.segmentText, view === m && styles.segmentTextActive]}>
               {m === 'calendar' ? 'Calendario' : 'Agenda'}
@@ -167,11 +177,11 @@ export default function FinancialCalendarScreen() {
       </View>
 
       <View style={styles.monthNav}>
-        <Pressable onPress={() => goMonth(-1)} hitSlop={12}>
+        <Pressable onPress={() => goMonth(-1)} hitSlop={ARROW_HIT_SLOP} accessibilityRole="button" accessibilityLabel="Mes anterior">
           <Text style={styles.monthArrow}>‹</Text>
         </Pressable>
         <Text style={styles.monthLabel}>{monthLabel(monthKey)}</Text>
-        <Pressable onPress={() => goMonth(1)} hitSlop={12}>
+        <Pressable onPress={() => goMonth(1)} hitSlop={ARROW_HIT_SLOP} accessibilityRole="button" accessibilityLabel="Mes siguiente">
           <Text style={styles.monthArrow}>›</Text>
         </Pressable>
       </View>
@@ -193,6 +203,7 @@ export default function FinancialCalendarScreen() {
             <Switch
               value={remindersEnabled}
               onValueChange={handleToggleReminders}
+              accessibilityLabel="Recordatorios de gastos recurrentes"
               trackColor={{ true: theme.primary, false: theme.border }}
             />
           </View>
@@ -210,7 +221,7 @@ export default function FinancialCalendarScreen() {
               </View>
               {selectedDate ? (
                 <>
-                  <Text style={styles.sectionTitle}>{selectedDate}</Text>
+                  <Text style={styles.sectionTitle}>{formatLongDate(selectedDate)}</Text>
                   {daysOccurrences.length === 0 ? (
                     <Text style={styles.emptyText}>Sin gastos previstos este día.</Text>
                   ) : (

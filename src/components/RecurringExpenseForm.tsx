@@ -10,6 +10,7 @@ import type {
   RecurringAmountMode,
   RecurringRuleInput,
 } from '../types/recurringExpenses';
+import { CHIP_HIT_SLOP } from './touchTargets';
 
 interface RecurringExpenseFormProps {
   initial: RecurringRuleInput;
@@ -100,6 +101,9 @@ export function RecurringExpenseForm({
         {EXPENSE_CATEGORIES.map((cat) => (
           <Pressable
             key={cat}
+            hitSlop={CHIP_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityState={{ selected: category === cat }}
             style={[styles.chip, category === cat && styles.chipSelected]}
             onPress={() => setCategory(cat)}
           >
@@ -115,6 +119,9 @@ export function RecurringExpenseForm({
         {AMOUNT_MODES.map((m) => (
           <Pressable
             key={m.value}
+            hitSlop={CHIP_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityState={{ selected: amountMode === m.value }}
             style={[styles.chip, amountMode === m.value && styles.chipSelected]}
             onPress={() => setAmountMode(m.value)}
           >
@@ -145,6 +152,9 @@ export function RecurringExpenseForm({
         ).map((m) => (
           <Pressable
             key={m.value}
+            hitSlop={CHIP_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityState={{ selected: fundMode === m.value }}
             style={[styles.chip, fundMode === m.value && styles.chipSelected]}
             onPress={() => setFundMode(m.value)}
           >
@@ -218,7 +228,7 @@ function createStyles(theme: Theme) {
     marginTop: { marginTop: 10 },
     chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chipsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-    chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+    chip: { minHeight: 36, justifyContent: 'center', borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
     chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
     chipText: { fontSize: 13, color: theme.text },
     chipTextSelected: { color: theme.primaryText, fontWeight: '600' },

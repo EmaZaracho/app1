@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useTheme, type Theme } from '../theme';
 import { CATEGORY_ICON } from '../categoryVisuals';
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from '../types';
+import { ARROW_HIT_SLOP, CHIP_HIT_SLOP } from './touchTargets';
 
 export interface EditableReceiptItem {
   id: string;
@@ -51,7 +52,7 @@ export function ReceiptItemRow({
           placeholder="0"
           placeholderTextColor={theme.textMuted}
         />
-        <Pressable style={styles.removeButton} onPress={onRemove}>
+        <Pressable style={styles.removeButton} onPress={onRemove} hitSlop={ARROW_HIT_SLOP} accessibilityRole="button" accessibilityLabel="Quitar ítem">
           <Text style={styles.removeText}>✕</Text>
         </Pressable>
       </View>
@@ -71,6 +72,9 @@ export function ReceiptItemRow({
           {EXPENSE_CATEGORIES.map((cat) => (
             <Pressable
               key={cat}
+              hitSlop={CHIP_HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityState={{ selected: cat === item.category }}
               style={[styles.categoryChip, cat === item.category && styles.categoryChipSelected]}
               onPress={() => onChangeCategory(cat)}
             >
@@ -138,6 +142,8 @@ function createStyles(theme: Theme) {
     categoryPillText: { fontSize: 12, color: theme.textSecondary, fontWeight: '600' },
     categoryRow: { gap: 8, paddingTop: 10 },
     categoryChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,

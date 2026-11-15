@@ -15,6 +15,7 @@ import { formatCurrency } from '../utils/format';
 import { colorForCategory, iconForCategory } from '../categoryVisuals';
 import { useTheme, type Theme } from '../theme';
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Movement, type RootStackParamList } from '../types';
+import { CHIP_HIT_SLOP } from '../components/touchTargets';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PurchaseDetail'>;
 
@@ -159,6 +160,7 @@ export default function PurchaseDetailScreen({ route, navigation }: Props) {
             key={cat}
             accessibilityRole="button"
             accessibilityState={{ selected: cat === newCategory }}
+            hitSlop={CHIP_HIT_SLOP}
             style={[styles.categoryChip, cat === newCategory && styles.categoryChipSelected]}
             onPress={() => setNewCategory(cat)}
           >
@@ -231,6 +233,8 @@ function createStyles(theme: Theme) {
     hint: { fontSize: 12, color: theme.textMuted, marginTop: 8 },
     categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
     categoryChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 18,

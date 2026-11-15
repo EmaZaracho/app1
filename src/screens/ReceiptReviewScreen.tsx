@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { useDb } from '../db/useDb';
 import { computeFundSelection } from '../domain/movementRules';
 import { FundSelector, type SelectableFund } from '../components/FundSelector';
 import { ReceiptItemRow, type EditableReceiptItem } from '../components/ReceiptItemRow';
+import { UndoBanner } from '../components/UndoBanner';
 import { formatCurrency } from '../utils/format';
 import { useTheme, type Theme } from '../theme';
 import type { ExpenseCategory, NewMovement, RootStackParamList } from '../types';
@@ -52,6 +53,7 @@ export default function ReceiptReviewScreen({ route, navigation }: Props) {
   const [defaultFundId, setDefaultFundId] = useState<number | null>(null);
   const [activeFundOptions, setActiveFundOptions] = useState<{ id: number; isDefault: boolean }[]>([]);
   const [selectedFundId, setSelectedFundId] = useState<number | null>(null);
+  const [removed, setRemoved] = useState<{ item: EditableReceiptItem; index: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,13 +86,33 @@ export default function ReceiptReviewScreen({ route, navigation }: Props) {
     }, [db])
   );
 
+  // El aviso de "deshacer" se oculta solo para no quedar colgado.
+  useEffect(() => {
+    if (!removed) return;
+    const timer = setTimeout(() => setRemoved(null), 6000);
+    return () => clearTimeout(timer);
+  }, [removed]);
+
   function updateItem(id: string, patch: Partial<EditableReceiptItem>) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
 
   function removeItem(id: string) {
+    const index = items.findIndex((it) => it.id === id);
+    if (index >= 0) setRemoved({ item: items[index], index });
     setItems((prev) => prev.filter((it) => it.id !== id));
     if (expandedItemId === id) setExpandedItemId(null);
+  }
+
+  function undoRemove() {
+    if (!removed) return;
+    const { item, index } = removed;
+    setItems((prev) => {
+      const next = [...prev];
+      next.splice(Math.min(index, next.length), 0, item);
+      return next;
+    });
+    setRemoved(null);
   }
 
   const parsedAmounts = items.map((it) => Number(it.amountText.replace(',', '.')));
@@ -191,11 +213,16 @@ export default function ReceiptReviewScreen({ route, navigation }: Props) {
           ))
         )}
 
+        <UndoBanner visible={removed != null} onUndo={undoRemove} message="Ítem quitado." />
+
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>{formatCurrency(sumAmount)}</Text>
         </View>
         {totalMismatchWarning ? <Text style={styles.warningText}>⚠️ {totalMismatchWarning}</Text> : null}
+        {hasInvalidAmount ? (
+          <Text style={styles.warningText}>Cada ítem necesita un monto mayor a 0 para poder confirmar.</Text>
+        ) : null}
 
         <FundSelector
           label="¿Desde qué fondo se pagó?"

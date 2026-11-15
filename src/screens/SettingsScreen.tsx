@@ -17,6 +17,7 @@ import { useDb } from '../db/useDb';
 import { getTrackingStart, setTrackingStart } from '../db/financialPreferencesRepository';
 import { useTheme, type Theme } from '../theme';
 import { AI_PROVIDERS, type AIProvider, type MainTabParamList, type RootStackParamList } from '../types';
+import { CHIP_HIT_SLOP } from '../components/touchTargets';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'SettingsTab'>,
@@ -167,6 +168,9 @@ export default function SettingsScreen({ navigation }: Props) {
         {AI_PROVIDERS.map((p) => (
           <Pressable
             key={p.id}
+            hitSlop={CHIP_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityState={{ selected: provider === p.id }}
             style={[styles.providerChip, provider === p.id && styles.providerChipSelected]}
             onPress={() => handleSelectProvider(p.id)}
           >
@@ -187,7 +191,8 @@ export default function SettingsScreen({ navigation }: Props) {
         style={styles.input}
         value={key}
         onChangeText={setKey}
-        placeholder="sk-..."
+        placeholder={provider === 'gemini' ? 'AIza...' : 'sk-...'}
+        accessibilityLabel={`API key de ${providerInfo.label}`}
         placeholderTextColor={theme.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -252,6 +257,8 @@ function createStyles(theme: Theme) {
     keyLabel: { marginTop: 24 },
     providerRow: { flexDirection: 'row', gap: 8 },
     providerChip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 16,

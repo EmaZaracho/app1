@@ -8,6 +8,7 @@ import { iconForCategory } from '../categoryVisuals';
 import { useTheme, type Theme } from '../theme';
 import type { SpendingPriority } from '../types/financialAnalytics';
 import type { ExpenseCategory } from '../types';
+import { CHIP_HIT_SLOP } from '../components/touchTargets';
 
 const PRIORITIES: { value: SpendingPriority; label: string; description: string }[] = [
   {
@@ -69,6 +70,9 @@ export default function CategoryPrioritySettingsScreen() {
               {PRIORITIES.map((p) => (
                 <Pressable
                   key={p.value}
+                  hitSlop={CHIP_HIT_SLOP}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: item.priority === p.value }}
                   style={[styles.chip, item.priority === p.value && styles.chipSelected]}
                   onPress={() => handleChange(item.category, p.value)}
                 >
@@ -96,7 +100,7 @@ function createStyles(theme: Theme) {
     row: { marginBottom: 20 },
     category: { fontSize: 16, fontWeight: '600', color: theme.text, marginBottom: 8 },
     optionsRow: { flexDirection: 'row', gap: 8 },
-    chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+    chip: { minHeight: 36, justifyContent: 'center', borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
     chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
     chipText: { fontSize: 13, color: theme.text },
     chipTextSelected: { color: theme.primaryText, fontWeight: '600' },

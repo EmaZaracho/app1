@@ -102,7 +102,7 @@ export function FundCarousel({ slides, activeIndex, onIndexChange, onAddFund }: 
           </View>
         )}
         ListFooterComponent={
-          <Pressable style={[styles.addCard]} onPress={onAddFund}>
+          <Pressable style={[styles.addCard]} onPress={onAddFund} accessibilityRole="button" accessibilityLabel="Agregar fondo">
             <Text style={styles.addPlus}>＋</Text>
             <Text style={styles.addLabel}>Agregar fondo</Text>
           </Pressable>

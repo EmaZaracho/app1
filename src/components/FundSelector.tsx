@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme, type Theme } from '../theme';
+import { CHIP_HIT_SLOP } from './touchTargets';
 
 export interface SelectableFund {
   id: number;
@@ -52,12 +53,15 @@ export function FundSelector({
           return (
             <Pressable
               key={fund.id}
+              hitSlop={CHIP_HIT_SLOP}
               style={[
                 styles.chip,
                 { borderColor: selected ? fund.color : theme.border },
                 selected && { backgroundColor: fund.color },
               ]}
               onPress={() => onSelect(fund.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
             >
               <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                 {fund.icon} {fund.name}
@@ -77,6 +81,8 @@ function createStyles(theme: Theme) {
     requiredMark: { color: theme.danger },
     row: { gap: 8, paddingBottom: 4 },
     chip: {
+      minHeight: 36,
+      justifyContent: 'center',
       borderWidth: 1,
       borderRadius: 16,
       paddingHorizontal: 12,

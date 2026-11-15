@@ -68,7 +68,7 @@ function MainTabs() {
         options={{
           title: TAB_SCREEN_TITLES.HomeTab,
           tabBarLabel: homeTab.label,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>{homeTab.icon}</Text>,
+          tabBarIcon: ({ color }) => <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 20, color }}>{homeTab.icon}</Text>,
         }}
       />
       <Tab.Screen
@@ -77,7 +77,7 @@ function MainTabs() {
         options={{
           title: TAB_SCREEN_TITLES.SummaryTab,
           tabBarLabel: summaryTab.label,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>{summaryTab.icon}</Text>,
+          tabBarIcon: ({ color }) => <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 20, color }}>{summaryTab.icon}</Text>,
         }}
       />
       <Tab.Screen
@@ -86,7 +86,7 @@ function MainTabs() {
         options={{
           title: TAB_SCREEN_TITLES.CalendarTab,
           tabBarLabel: calendarTab.label,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>{calendarTab.icon}</Text>,
+          tabBarIcon: ({ color }) => <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 20, color }}>{calendarTab.icon}</Text>,
         }}
       />
       <Tab.Screen
@@ -95,7 +95,7 @@ function MainTabs() {
         options={{
           title: TAB_SCREEN_TITLES.SettingsTab,
           tabBarLabel: settingsTab.label,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>{settingsTab.icon}</Text>,
+          tabBarIcon: ({ color }) => <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 20, color }}>{settingsTab.icon}</Text>,
         }}
       />
     </Tab.Navigator>
